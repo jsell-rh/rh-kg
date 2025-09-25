@@ -28,3 +28,4 @@
 - **Atomic commits** - each commit represents a single logical change
 - **Frequent commits** - commit early and often to maintain clear development history
 - **Test-Driven Development (TDD)** - write tests first, then implement functionality
+- **Specification-Driven Development** - spec/ directory contains authoritative design documents that MUST be referenced before writing any code
