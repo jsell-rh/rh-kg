@@ -1,5 +1,6 @@
 """Core functionality for the knowledge graph."""
 
+from .model_factory import DynamicModelFactory
 from .schema import (
     EntitySchema,
     FieldDefinition,
@@ -13,6 +14,7 @@ from .schema_loader import FileSchemaLoader, SchemaLoader
 
 # Export all schema-related components
 __all__ = [
+    "DynamicModelFactory",
     "EntitySchema",
     "FieldDefinition",
     "FileSchemaLoader",
