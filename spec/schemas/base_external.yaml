@@ -1,0 +1,36 @@
+# Base schema for external entities (permissive governance)
+
+schema_type: base_external
+schema_version: "1.0.0"
+governance: permissive
+
+# System-managed metadata (applies to all external entities)
+readonly_metadata:
+  created_at:
+    type: datetime
+    description: "Timestamp when entity was first referenced"
+    indexed: false
+
+  first_referenced_by:
+    type: string
+    description: "Repository that first referenced this entity"
+    indexed: true
+
+  reference_count:
+    type: integer
+    description: "Number of repositories referencing this entity"
+    indexed: true
+
+# Validation rules for external entities
+validation_rules:
+  unknown_fields: warn
+  missing_required_fields: warn
+  auto_create: true
+
+# Deletion policy
+deletion_policy:
+  type: never_delete
+  description: "External entities are never deleted, only relationships are removed"
+
+# Custom fields
+allow_custom_fields: false

@@ -1,0 +1,63 @@
+# External dependency package entity schema
+
+entity_type: external_dependency_package
+schema_version: "1.0.0"
+extends: base_external
+
+# Entity description
+description: "External package from an ecosystem (pypi, npm, etc.)"
+
+# Required metadata fields
+required_metadata:
+  ecosystem:
+    type: string
+    validation: enum
+    allowed_values: [pypi, npm, golang.org/x, github.com, crates.io]
+    description: "Package ecosystem"
+    indexed: true
+
+  package_name:
+    type: string
+    min_length: 1
+    description: "Package name within ecosystem"
+    indexed: true
+
+# Optional metadata fields
+optional_metadata: {}
+
+# Relationships this entity can have
+relationships:
+  has_version:
+    description: "Versions of this package"
+    target_types: [external_dependency_version]
+    cardinality: one_to_many
+    direction: outbound
+
+# Dgraph schema generation
+dgraph_type: ExternalDependencyPackage
+dgraph_predicates:
+  id:
+    type: string
+    index: [exact]
+    description: "Canonical ID: external://ecosystem/package"
+
+  ecosystem:
+    type: string
+    index: [exact]
+    description: "Package ecosystem"
+
+  package_name:
+    type: string
+    index: [exact]
+    description: "Package name"
+
+  has_version:
+    type: "[uid]"
+    reverse: true
+    description: "Package versions"
+
+# Auto-creation rules
+auto_creation:
+  enabled: true
+  trigger: "when first external dependency references this package"
+  id_format: "external://{ecosystem}/{package_name}"

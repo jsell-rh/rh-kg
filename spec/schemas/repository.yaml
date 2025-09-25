@@ -1,0 +1,85 @@
+# Repository entity schema
+
+entity_type: repository
+schema_version: "1.0.0"
+extends: base_internal
+
+# Entity description
+description: "Code repository entity representing a git repository"
+
+# Required metadata fields
+required_metadata:
+  owners:
+    type: array
+    items: string
+    validation: email
+    min_items: 1
+    description: "List of team email addresses responsible for repository"
+    indexed: true
+
+  git_repo_url:
+    type: string
+    validation: url
+    description: "Git repository URL (GitHub, GitLab, etc.)"
+    indexed: true
+
+# Optional metadata fields
+optional_metadata: {}
+
+# Relationships this entity can have
+relationships:
+  depends_on:
+    description: "External dependencies used by this repository"
+    target_types: [external_dependency_version]
+    cardinality: one_to_many
+    direction: outbound
+
+  internal_depends_on:
+    description: "Internal dependencies (other repositories)"
+    target_types: [repository]
+    cardinality: one_to_many
+    direction: outbound
+
+# Dgraph schema generation
+dgraph_type: Repository
+dgraph_predicates:
+  id:
+    type: string
+    index: [exact]
+    description: "Unique identifier: namespace/repository-name"
+
+  namespace:
+    type: string
+    index: [exact]
+    description: "Repository namespace"
+
+  name:
+    type: string
+    index: [exact]
+    description: "Repository name"
+
+  owners:
+    type: "[string]"
+    index: [exact]
+    description: "Owner email addresses"
+
+  git_repo_url:
+    type: string
+    index: [exact]
+    description: "Git repository URL"
+
+  depends_on:
+    type: "[uid]"
+    reverse: true
+    description: "External dependencies"
+
+  internal_depends_on:
+    type: "[uid]"
+    reverse: true
+    description: "Internal dependencies"
+
+# Validation rules specific to repositories
+validation_rules:
+  unique_name_per_namespace: true
+  valid_dependency_references: true
+  owner_domain_consistency: warn

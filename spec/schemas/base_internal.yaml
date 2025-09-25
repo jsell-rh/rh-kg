@@ -1,0 +1,41 @@
+# Base schema for internal entities (strict governance)
+
+schema_type: base_internal
+schema_version: "1.0.0"
+governance: strict
+
+# System-managed metadata (applies to all internal entities)
+readonly_metadata:
+  created_at:
+    type: datetime
+    description: "Timestamp when entity was first created"
+    indexed: false
+
+  updated_at:
+    type: datetime
+    description: "Timestamp when entity was last updated"
+    indexed: false
+
+  source_repo:
+    type: string
+    description: "Repository that submitted this entity data"
+    indexed: true
+
+  source_commit:
+    type: string
+    description: "Git commit hash of the submission"
+    indexed: false
+
+# Validation rules for internal entities
+validation_rules:
+  unknown_fields: reject
+  missing_required_fields: reject
+  namespace_ownership: enforce
+
+# Deletion policy
+deletion_policy:
+  type: reference_counted
+  description: "Can only delete if no other entities reference this one"
+
+# Custom fields
+allow_custom_fields: false

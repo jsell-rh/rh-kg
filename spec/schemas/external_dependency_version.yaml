@@ -1,0 +1,86 @@
+# External dependency version entity schema
+
+entity_type: external_dependency_version
+schema_version: "1.0.0"
+extends: base_external
+
+# Entity description
+description: "Specific version of an external package"
+
+# Required metadata fields
+required_metadata:
+  ecosystem:
+    type: string
+    validation: enum
+    allowed_values: [pypi, npm, golang.org/x, github.com, crates.io]
+    description: "Package ecosystem"
+    indexed: true
+
+  package_name:
+    type: string
+    min_length: 1
+    description: "Package name within ecosystem"
+    indexed: true
+
+  version:
+    type: string
+    min_length: 1
+    description: "Package version"
+    indexed: true
+
+# Optional metadata fields
+optional_metadata: {}
+
+# Relationships this entity can have
+relationships:
+  package:
+    description: "Parent package this version belongs to"
+    target_types: [external_dependency_package]
+    cardinality: many_to_one
+    direction: outbound
+
+  referenced_by:
+    description: "Repositories that depend on this version"
+    target_types: [repository]
+    cardinality: one_to_many
+    direction: inbound
+
+# Dgraph schema generation
+dgraph_type: ExternalDependencyVersion
+dgraph_predicates:
+  id:
+    type: string
+    index: [exact]
+    description: "Canonical ID: external://ecosystem/package/version"
+
+  ecosystem:
+    type: string
+    index: [exact]
+    description: "Package ecosystem"
+
+  package_name:
+    type: string
+    index: [exact]
+    description: "Package name"
+
+  version:
+    type: string
+    index: [exact]
+    description: "Package version"
+
+  package:
+    type: uid
+    reverse: true
+    description: "Parent package"
+
+  referenced_by:
+    type: "[uid]"
+    reverse: true
+    description: "Repositories using this version"
+
+# Auto-creation rules
+auto_creation:
+  enabled: true
+  trigger: "when first dependency references this version"
+  id_format: "external://{ecosystem}/{package_name}/{version}"
+  auto_link_to_package: true
