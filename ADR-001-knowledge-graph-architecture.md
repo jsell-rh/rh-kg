@@ -95,33 +95,104 @@ entity:
 **Chosen:** Schema files in server repository with API reload endpoint
 **Rationale:** Enables schema updates without server restarts, maintains backwards compatibility
 
+### Complexity Management: Rigid First, Flexible Later
+**Chosen:** Start with highly constrained schema focused on specific high-value problems, plan explicit migration points for flexibility
+**Implementation Strategy:**
+
+**1. Minimal Viable Schema (MVP Phase):**
+```yaml
+# Phase 1: Only essential fields allowed, strict validation
+entity:
+  repository:
+    - name:
+        owner: "team@redhat.com"           # REQUIRED
+        depends_on: [list_of_entities]     # REQUIRED
+        # No other fields accepted
+```
+- **Reject unknown fields** with clear error messages
+- **Consistent data quality** enables reliable analytics
+- **Focus on 2-3 critical use cases** (dependency mapping, ownership tracking)
+- **Demonstrate clear value** before adding complexity
+
+**2. Planned Flexibility Phases:**
+- **Phase 2 (6 months):** Add service-level entities and operational metadata
+- **Phase 3 (12 months):** Add relationship precision (runtime vs build dependencies)
+- **Phase 4 (18 months):** Add custom metadata fields with governance
+
+**3. Schema Versioning for Migration Points:**
+- Each schema file includes version: `schema_version: "1.0.0"`
+- **Explicit migration events** between phases (not organic evolution)
+- **Migration scripts** and communication for breaking changes
+- **Multiple schema versions supported** only during planned transition periods (4-6 weeks max)
+
+**4. Value-Driven Expansion Criteria:**
+Before adding complexity, require evidence of:
+- **Adoption threshold:** 50+ repositories using current schema
+- **Value demonstration:** Teams regularly using graph for their decisions
+- **Specific pain points:** Clear problems that current schema cannot solve
+- **Usage analysis:** Query patterns showing need for additional complexity
+
+**5. Expansion Process:**
+- **RFC process** for schema changes with clear problem statements
+- **Pilot programs** with 5-10 repositories testing proposed changes
+- **Migration timeline** with rollback plans if adoption fails
+- **Documentation updates** and tooling changes before schema deployment
+
+**Rationale:**
+- **Adoption first:** Rigid schema ensures consistent data quality that demonstrates clear value
+- **Planned complexity:** Explicit decision points prevent feature creep and maintain simplicity
+- **Migration safety:** Versioning enables controlled evolution without breaking existing users
+- **Flexibility eventually:** System designed to accommodate Red Hat's diversity, but only after proving core value
+
 ## Consequences
 
 ### Positive
 - **Scalable governance:** Different rules for internal vs external entities
 - **Developer friendly:** Familiar YAML syntax, VSCode autocomplete via JSON Schema
-- **Consistent data:** CI-blocking prevents graph corruption
+- **Consistent data:** CI-blocking prevents graph corruption + rigid schema ensures quality
 - **Flexible queries:** Package and version level queries supported
 - **Low maintenance:** Auto-creation of external entities reduces manual work
+- **Clear value demonstration:** Focused schema solves specific problems well
+- **Predictable evolution:** Planned migration points prevent surprise breaking changes
+- **High data quality:** Strict validation ensures reliable analytics and AI consumption
 
 ### Negative
 - **Complexity:** Multi-tier entity model requires careful implementation
 - **Storage overhead:** Package/version separation increases node count
 - **Schema proliferation:** Each entity type needs explicit schema definition
 - **CI dependency:** Graph updates coupled to CI pipeline availability
+- **Initial inflexibility:** Teams with edge cases may be frustrated by rigid schema
+- **Migration overhead:** Planned schema evolution requires coordination and communication
+- **Delayed flexibility:** Complex use cases must wait for later phases
 
 ### Risks
-- **Schema evolution:** Backwards compatibility constraints may limit future changes
+- **Schema evolution:** Migration points may be disruptive if not well-managed
 - **Performance:** Reference counting for deletion may impact large graph updates
 - **Adoption:** Teams may resist additional YAML maintenance burden
 - **Conflict resolution:** Pre-commit blocking may slow development velocity
+- **Value threshold:** May never reach adoption levels needed to justify flexibility phases
+- **Migration complexity:** Schema versioning infrastructure adds significant implementation burden
 
 ## Implementation Notes
-1. Start with repository and external_dependency entity types for MVP
-2. Build GitHub Action template for easy repo adoption
-3. Generate JSON Schema automatically from YAML schemas for VSCode
-4. Implement conflict detection as separate validation step before graph updates
-5. Create web UI for graph exploration and conflict resolution workflow
+
+### Phase 1 (MVP): Rigid Schema Foundation
+1. **Minimal entity types:** Start with only `repository` and `external_dependency`
+2. **Strict validation:** Reject all unknown fields with clear error messages
+3. **Focus on value:** Target 2-3 specific high-value questions (dependency mapping, ownership)
+4. **Simple tooling:** Basic GitHub Action, CLI validator, minimal web UI
+5. **Success metrics:** 50+ repositories, regular usage for decision-making
+
+### Phase 2+: Planned Expansion
+1. **Evidence-based decisions:** Require clear problem statements before adding complexity
+2. **RFC process:** Community input on schema changes with pilot programs
+3. **Migration tooling:** Automated scripts and clear communication for breaking changes
+4. **Rollback capability:** Ability to revert schema changes if adoption fails
+
+### Technical Implementation
+1. **Schema versioning infrastructure:** Built from day one to support future migrations
+2. **JSON Schema generation:** Automatic VSCode autocomplete from rigid YAML schemas
+3. **Conflict detection:** Separate validation step before graph updates
+4. **Monitoring:** Track adoption metrics and query patterns to inform expansion decisions
 
 ## Alternatives Considered
 
@@ -133,6 +204,12 @@ entity:
 ### Schema Approaches
 - **Prefix-based rules:** Rejected for external entities due to poor tooling support
 - **Monolithic schema:** Rejected due to governance complexity
+- **Progressive refinement:** Rejected due to data quality concerns and adoption risks
+
+### Complexity Management Approaches
+- **Progressive schema refinement:** Rejected - allows organic evolution but leads to inconsistent data quality and complex analytics infrastructure
+- **Fully flexible from start:** Rejected - too complex for initial adoption, no clear value demonstration
+- **Rigid forever:** Rejected - doesn't accommodate Red Hat's long-term diversity needs
 
 ### Conflict Resolution
 - **Human override:** Rejected due to complexity of approval workflows
