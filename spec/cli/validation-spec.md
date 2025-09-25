@@ -8,6 +8,7 @@ to validate their knowledge graph YAML files.
 ## Command Interface
 
 ### Basic Usage
+
 ```bash
 kg validate [FILE] [OPTIONS]
 ```
@@ -15,12 +16,14 @@ kg validate [FILE] [OPTIONS]
 ### Arguments
 
 #### FILE (optional)
+
 - **Type:** File path
 - **Default:** `knowledge-graph.yaml` in current directory
 - **Purpose:** Path to knowledge graph YAML file to validate
 - **Behavior:** If file doesn't exist, command MUST fail with clear error
 
 **Examples:**
+
 ```bash
 kg validate                           # Validates ./knowledge-graph.yaml
 kg validate my-graph.yaml            # Validates ./my-graph.yaml
@@ -31,6 +34,7 @@ kg validate ../other/graph.yaml      # Validates relative path
 ### Options
 
 #### --schema-version (optional)
+
 - **Type:** String
 - **Default:** Auto-detect from file, fallback to "1.0.0"
 - **Purpose:** Specify schema version for validation
@@ -41,6 +45,7 @@ kg validate --schema-version 1.0.0 graph.yaml
 ```
 
 #### --strict (optional)
+
 - **Type:** Boolean flag
 - **Default:** true (Phase 1 behavior)
 - **Purpose:** Enable strict validation mode
@@ -52,6 +57,7 @@ kg validate --no-strict graph.yaml   # Future: permissive mode
 ```
 
 #### --format (optional)
+
 - **Type:** Enum: json, yaml, table, compact
 - **Default:** table
 - **Purpose:** Output format for validation results
@@ -62,6 +68,7 @@ kg validate --format compact graph.yaml
 ```
 
 #### --verbose, -v (optional)
+
 - **Type:** Boolean flag
 - **Default:** false
 - **Purpose:** Show detailed validation information
@@ -86,6 +93,7 @@ The command MUST use these exact exit codes:
 ### Success Output (Exit Code 0)
 
 #### Default Format (table)
+
 ```
 ✅ Validation successful
 
@@ -104,11 +112,13 @@ Summary:
 ```
 
 #### Compact Format
+
 ```
 ✅ knowledge-graph.yaml: VALID (schema=1.0.0, entities=3, deps=10)
 ```
 
 #### JSON Format
+
 ```json
 {
   "status": "valid",
@@ -121,11 +131,11 @@ Summary:
     "internal_dependencies": 2
   },
   "checks": [
-    {"name": "schema_format", "status": "pass"},
-    {"name": "required_fields", "status": "pass"},
-    {"name": "dependency_references", "status": "pass"},
-    {"name": "email_validation", "status": "pass"},
-    {"name": "url_validation", "status": "pass"}
+    { "name": "schema_format", "status": "pass" },
+    { "name": "required_fields", "status": "pass" },
+    { "name": "dependency_references", "status": "pass" },
+    { "name": "email_validation", "status": "pass" },
+    { "name": "url_validation", "status": "pass" }
   ]
 }
 ```
@@ -133,6 +143,7 @@ Summary:
 ### Error Output (Exit Code 1)
 
 #### Default Format (table)
+
 ```
 ❌ Validation failed
 
@@ -160,11 +171,13 @@ Summary:
 ```
 
 #### Compact Format
+
 ```
 ❌ knowledge-graph.yaml: INVALID (3 errors)
 ```
 
 #### JSON Format
+
 ```json
 {
   "status": "invalid",
@@ -204,6 +217,7 @@ Summary:
 ```
 
 ### File Not Found (Exit Code 2)
+
 ```
 ❌ File not found: knowledge-graph.yaml
 
@@ -213,6 +227,7 @@ Example: kg validate /path/to/your/graph.yaml
 ```
 
 ### Invalid Arguments (Exit Code 3)
+
 ```
 ❌ Invalid arguments
 
@@ -225,6 +240,7 @@ Run 'kg validate --help' for more information.
 ## Validation Behavior
 
 ### Schema Validation
+
 1. **Parse YAML:** Validate YAML syntax is correct
 2. **Schema version:** Verify schema_version field format and support
 3. **Structure validation:** Ensure all required top-level fields present
@@ -232,12 +248,14 @@ Run 'kg validate --help' for more information.
 5. **Reference validation:** Check all dependency references are well-formed
 
 ### Error Collection
+
 - **Continue on error:** Collect ALL errors, don't stop at first failure
 - **Line numbers:** Report exact line numbers for YAML parsing errors
 - **Context:** Provide entity/field context for each error
 - **Helpful messages:** Suggest corrections, not just error descriptions
 
 ### Validation Order
+
 1. **YAML parsing** (stop if fails)
 2. **Schema version validation** (stop if unsupported)
 3. **Global structure validation**
@@ -249,6 +267,7 @@ Run 'kg validate --help' for more information.
 ### Schema Format Errors
 
 #### Unknown Field
+
 ```
 Type: unknown_field
 Message: Unknown field '{field}' in {entity_type} '{entity_name}'
@@ -257,6 +276,7 @@ Context: Allowed fields: {allowed_fields}
 ```
 
 #### Invalid Schema Version
+
 ```
 Type: invalid_schema_version
 Message: Invalid schema version '{version}'
@@ -265,6 +285,7 @@ Example: "1.0.0"
 ```
 
 #### Unsupported Schema Version
+
 ```
 Type: unsupported_schema_version
 Message: Unsupported schema version '{version}'
@@ -275,6 +296,7 @@ Context: Latest supported: {latest_version}
 ### Required Field Errors
 
 #### Missing Required Field
+
 ```
 Type: missing_required_field
 Message: Missing required field '{field}' in {entity_type} '{entity_name}'
@@ -283,6 +305,7 @@ Context: Required fields: {required_fields}
 ```
 
 #### Empty Required Array
+
 ```
 Type: empty_required_array
 Message: Field '{field}' cannot be empty in {entity_type} '{entity_name}'
@@ -293,6 +316,7 @@ Example: {example_value}
 ### Format Validation Errors
 
 #### Invalid Email Format
+
 ```
 Type: invalid_email
 Message: Invalid email '{email}' in owners for {entity_type} '{entity_name}'
@@ -301,6 +325,7 @@ Example: user@redhat.com
 ```
 
 #### Invalid URL Format
+
 ```
 Type: invalid_url
 Message: Invalid URL '{url}' in {field} for {entity_type} '{entity_name}'
@@ -309,6 +334,7 @@ Example: https://github.com/org/repo
 ```
 
 #### Invalid Dependency Reference
+
 ```
 Type: invalid_dependency_reference
 Message: Invalid dependency reference '{reference}' in {entity_type} '{entity_name}'
@@ -322,6 +348,7 @@ Example: external://pypi/requests/2.31.0
 When `--verbose` flag is used, show additional information:
 
 ### Successful Validation
+
 ```
 ✅ Validation successful
 
@@ -350,6 +377,7 @@ All checks passed ✅
 ```
 
 ### Failed Validation
+
 ```
 ❌ Validation failed
 
@@ -374,6 +402,7 @@ Fix these errors and run validation again.
 ## Integration with CI/CD
 
 ### GitHub Actions Integration
+
 The validator MUST work seamlessly in CI environments:
 
 ```yaml
@@ -383,6 +412,7 @@ The validator MUST work seamlessly in CI environments:
 ```
 
 ### CI-Specific Behavior
+
 - **Exit codes** must be reliable for CI decision making
 - **JSON output** format must be stable for automated processing
 - **Error messages** must be actionable for developers
@@ -391,12 +421,14 @@ The validator MUST work seamlessly in CI environments:
 ## Future Extensions
 
 ### Phase 2 Planned Features
+
 - **Cross-reference validation:** Check internal dependencies exist
 - **Schema suggestion:** Suggest fixes for common errors
 - **Batch validation:** Validate multiple files at once
 - **Watch mode:** Continuous validation during development
 
 ### External Integration
+
 - **Pre-commit hooks:** Fast validation for git workflows
 - **IDE integration:** Real-time validation in editors
 - **Web validation:** API endpoint for web-based validation

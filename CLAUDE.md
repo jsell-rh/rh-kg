@@ -7,6 +7,7 @@
 ## Development Standards
 
 ### Technology Stack
+
 1. **FastAPI/Python** for all components (CLI, server, shared libraries)
 2. **Alembic** for SQL migrations
 3. **SQLAlchemy** for all SQL interactions
@@ -15,12 +16,14 @@
 6. **Python 3.12** with modern typing conventions
 
 ### Code Quality Standards
+
 - **Always use type hints** - avoid `Any` type
 - **Use Python 3.12 typing conventions**: `dict[str, list]` instead of `Dict[str, List]`
 - **Google search for latest library versions** before adding dependencies
 - **Strict typing** throughout the codebase
 
 ### Development Environment
+
 - **UV** for Python package and environment management
 - **Monorepo structure** - all components in single repository
 - **Pre-commit hooks** must pass before any commit

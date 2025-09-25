@@ -5,6 +5,7 @@
 This document provides detailed technical specifications for the Red Hat Knowledge Graph system. The architecture uses a rigid schema approach with planned evolution phases, implemented on Dgraph with GitHub Actions automation.
 
 **Core Principles:**
+
 - Strict validation ensuring consistent data quality
 - Schema versioning for controlled evolution
 - Separate governance for internal vs external entities
@@ -50,10 +51,12 @@ entity:
 #### Required Fields
 
 **Global:**
+
 - `schema_version`: Exact version string for validation and migration
 - `namespace`: Explicit namespace declaration (conflicts detected across repos)
 
 **Repository Entity:**
+
 - `metadata.owners`: List of email addresses of owning teams (REQUIRED, minimum 1)
 - `metadata.git_repo_url`: Git repository URL (REQUIRED)
 - `depends_on`: List of dependency references (can be empty list, cannot be omitted)
@@ -61,6 +64,7 @@ entity:
 #### Validation Rules
 
 **Strict validation rejects:**
+
 - Unknown fields at any level
 - Invalid entity types
 - Missing required fields
@@ -69,6 +73,7 @@ entity:
 - Invalid dependency references
 
 **Example validation errors:**
+
 ```yaml
 # ❌ INVALID - unknown field
 entity:
@@ -107,10 +112,12 @@ external://<ecosystem>/<package>/<version>
 ```
 
 **Ecosystem Detection:**
+
 - Automatic detection from repository context (package.json → npm, requirements.txt → pypi)
 - Manual specification supported: `external://pypi/requests/2.31.0`
 
 **Examples:**
+
 ```yaml
 depends_on:
   # Python packages
@@ -136,9 +143,9 @@ The server automatically canonicalizes external dependency names to prevent dupl
 
 ```yaml
 # These all resolve to: external://pypi/requests/2.31.0
-- external://pypi/requests/2.31.0      # Canonical form
-- external://pypi/python-requests/2.31.0  # Auto-corrected
-- requests/2.31.0                      # Context-detected (pypi)
+- external://pypi/requests/2.31.0 # Canonical form
+- external://pypi/python-requests/2.31.0 # Auto-corrected
+- requests/2.31.0 # Context-detected (pypi)
 ```
 
 ## Graph Data Model
@@ -190,6 +197,7 @@ type ExternalDependencyVersion {
 #### Query Examples
 
 **Find all repositories using any version of requests:**
+
 ```graphql
 {
   package(func: eq(id, "external://pypi/requests")) {
@@ -205,6 +213,7 @@ type ExternalDependencyVersion {
 ```
 
 **Find repositories using specific version:**
+
 ```graphql
 {
   version(func: eq(id, "external://pypi/requests/2.31.0")) {
@@ -226,6 +235,7 @@ Schema definitions use inheritance to handle different governance models for int
 #### Base Schema Files
 
 **schemas/base_internal.yaml:**
+
 ```yaml
 base_internal:
   governance: strict
@@ -243,6 +253,7 @@ base_internal:
 ```
 
 **schemas/base_external.yaml:**
+
 ```yaml
 base_external:
   governance: permissive
@@ -259,6 +270,7 @@ base_external:
 #### Entity Type Schemas
 
 **schemas/repository.yaml:**
+
 ```yaml
 entity_type: repository
 schema_version: "1.0.0"
@@ -295,10 +307,11 @@ Each schema file includes version information for migration management.
 #### Version Format
 
 ```yaml
-schema_version: "1.0.0"  # Major.Minor.Patch
+schema_version: "1.0.0" # Major.Minor.Patch
 ```
 
 **Version semantics:**
+
 - **Major:** Breaking changes requiring migration
 - **Minor:** Backward-compatible additions
 - **Patch:** Bug fixes, clarifications
@@ -306,6 +319,7 @@ schema_version: "1.0.0"  # Major.Minor.Patch
 #### Migration Support
 
 **Multiple schema versions during transitions:**
+
 ```yaml
 # Server supports multiple versions simultaneously
 supported_schema_versions: ["1.0.0", "1.1.0"]
@@ -314,6 +328,7 @@ migration_deadline: "2025-03-01"
 ```
 
 **Migration script example:**
+
 ```bash
 # Automated migration from 1.0.0 to 1.1.0
 kg migrate --from 1.0.0 --to 1.1.0 --repo rosa-hcp/rosa-hcp-service
@@ -337,6 +352,7 @@ External dependencies are automatically created when first referenced, with smar
 #### Ecosystem Detection
 
 **Automatic detection from repository context:**
+
 ```python
 def detect_ecosystem(dependency_name, repo_files):
     if 'package.json' in repo_files:
@@ -354,6 +370,7 @@ def detect_ecosystem(dependency_name, repo_files):
 ### Canonicalization Rules
 
 **Package name normalization:**
+
 ```yaml
 # Input variations all resolve to canonical form
 input_variations:
@@ -366,6 +383,7 @@ canonical_output: "external://pypi/requests"
 ```
 
 **Version normalization:**
+
 ```yaml
 # Version string standardization
 input_variations:
@@ -384,6 +402,7 @@ canonical_output: "2.31.0"
 #### Create Operation
 
 **Repository submission via GitHub Action:**
+
 ```yaml
 POST /api/v1/graph/submit
 Authorization: Bearer <github-token>
@@ -405,6 +424,7 @@ entity:
 ```
 
 **Server processing:**
+
 1. **Schema validation** against rigid v1.0.0 rules
 2. **Namespace conflict check** across all repositories
 3. **External dependency auto-creation** if needed
@@ -414,6 +434,7 @@ entity:
 #### Update Operation
 
 **Declarative updates replace entire entity:**
+
 ```yaml
 # Previous state
 entity:
@@ -437,6 +458,7 @@ entity:
 ```
 
 **Server processing:**
+
 1. **Diff calculation** between current and submitted state
 2. **Reference counting updates** for removed dependencies
 3. **New dependency creation** if needed
@@ -445,13 +467,15 @@ entity:
 #### Delete Operation
 
 **Entity removal from YAML:**
+
 ```yaml
 # Repository removes entity entirely
 entity:
-  repository: []  # rosa-hcp-service no longer listed
+  repository: [] # rosa-hcp-service no longer listed
 ```
 
 **Server processing with reference counting:**
+
 ```python
 def delete_entity(entity_id):
     # Check for references from other entities
@@ -473,11 +497,13 @@ def delete_entity(entity_id):
 ### Deletion Policies
 
 **Internal entities (strict reference counting):**
+
 - Can only be deleted if no references exist
 - Deletion fails with clear error if references found
 - All outbound relationships cascade deleted
 
 **External entities (permissive):**
+
 - Never deleted, even when no references remain
 - Relationships removed when source repository deletes them
 - Orphaned entities preserved for future references
@@ -487,6 +513,7 @@ def delete_entity(entity_id):
 ### Namespace Conflicts
 
 **Scenario:** Two repositories claim same namespace
+
 ```yaml
 # Repo A: github.com/team-a/service-x
 namespace: shared-utils
@@ -496,6 +523,7 @@ namespace: shared-utils  # CONFLICT if teams different
 ```
 
 **Resolution:** Allow multiple repos in same namespace only if same owner domain
+
 ```python
 def validate_namespace_ownership(namespace, owners_list, existing_owners):
     # Check domain consistency within submitted owners
@@ -520,6 +548,7 @@ def validate_namespace_ownership(namespace, owners_list, existing_owners):
 ### Entity Ownership Conflicts
 
 **Scenario:** Two repositories define same entity
+
 ```yaml
 # Repo A
 entity:
@@ -535,6 +564,7 @@ entity:
 ```
 
 **Resolution:** First-come-first-served with clear error
+
 ```python
 def validate_entity_ownership(entity_id, owners_list):
     existing_entity = get_entity(entity_id)
@@ -628,9 +658,9 @@ name: Knowledge Graph Update
 
 on:
   push:
-    paths: ['knowledge-graph.yaml']
+    paths: ["knowledge-graph.yaml"]
   pull_request:
-    paths: ['knowledge-graph.yaml']
+    paths: ["knowledge-graph.yaml"]
 
 jobs:
   validate-and-submit:
@@ -684,11 +714,13 @@ def validate_yaml_file(file_path, schema_version):
 ### Performance Considerations
 
 **Query Optimization:**
+
 - Index on common query patterns (owner, namespace)
 - Materialized views for expensive traversals
 - Connection pooling for high-throughput scenarios
 
 **Storage Efficiency:**
+
 - Package/version separation reduces duplicate version storage
 - Reference counting enables efficient orphan detection
 - Audit trail compression for long-running repositories
@@ -696,11 +728,13 @@ def validate_yaml_file(file_path, schema_version):
 ### Security Model
 
 **Authentication:**
+
 - GitHub App integration for repository-level permissions
 - Personal access tokens for development/testing
 - Red Hat SSO integration for web interface
 
 **Authorization:**
+
 - Repository owners can only modify their own entities
 - Namespace ownership validation prevents squatting
 - Admin override capability for conflict resolution
@@ -708,12 +742,14 @@ def validate_yaml_file(file_path, schema_version):
 ### Monitoring and Observability
 
 **Key Metrics:**
+
 - Ingestion rate (submissions per hour)
 - Query response times (p50, p95, p99)
 - Validation failure rates by error type
 - Reference counting accuracy
 
 **Alerting:**
+
 - Schema validation failures above threshold
 - Server response time degradation
 - Conflict detection false positives
@@ -722,6 +758,7 @@ def validate_yaml_file(file_path, schema_version):
 ### Error Handling
 
 **Graceful Degradation:**
+
 - Read-only mode during server maintenance
 - Cached schema validation for network issues
 - Retry logic for transient failures

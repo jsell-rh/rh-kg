@@ -12,6 +12,7 @@ The model follows the package/version separation approach for external dependenc
 Represents a code repository entity from the YAML files.
 
 #### Dgraph Type Definition
+
 ```graphql
 type Repository {
   id: string @id              # Fully qualified ID: <namespace>/<repository-name>
@@ -36,11 +37,13 @@ type Repository {
 ```
 
 #### Node ID Format
+
 ```
 <namespace>/<repository-name>
 ```
 
 **Examples:**
+
 - `rosa-hcp/rosa-hcp-service`
 - `shared-utils/logging-library`
 - `openshift-auth/auth-service`
@@ -48,26 +51,31 @@ type Repository {
 #### Field Specifications
 
 **id (required)**
+
 - Unique identifier combining namespace and repository name
 - Format: `<namespace>/<repository-name>`
 - Must be URL-safe characters only
 
 **namespace (required)**
+
 - Repository namespace from YAML file
 - Indexed for efficient namespace-based queries
 - Must follow kebab-case convention
 
 **name (required)**
+
 - Repository name from YAML file
 - Indexed for efficient name-based lookups
 - Combined with namespace to form unique ID
 
 **owners (required)**
+
 - Array of email addresses from YAML metadata
 - Each email indexed separately for owner-based queries
 - Minimum 1 item, no maximum limit
 
 **git_repo_url (required)**
+
 - Repository URL from YAML metadata
 - Indexed for reverse lookups
 - Must be valid HTTP/HTTPS URL
@@ -77,6 +85,7 @@ type Repository {
 Represents a package from an external ecosystem (pypi, npm, etc.).
 
 #### Dgraph Type Definition
+
 ```graphql
 type ExternalDependencyPackage {
   id: string @id              # Format: external://<ecosystem>/<package>
@@ -96,11 +105,13 @@ type ExternalDependencyPackage {
 ```
 
 #### Node ID Format
+
 ```
 external://<ecosystem>/<package>
 ```
 
 **Examples:**
+
 - `external://pypi/requests`
 - `external://npm/@types/node`
 - `external://golang.org/x/client-go`
@@ -110,6 +121,7 @@ external://<ecosystem>/<package>
 Represents a specific version of an external package.
 
 #### Dgraph Type Definition
+
 ```graphql
 type ExternalDependencyVersion {
   id: string @id              # Format: external://<ecosystem>/<package>/<version>
@@ -132,11 +144,13 @@ type ExternalDependencyVersion {
 ```
 
 #### Node ID Format
+
 ```
 external://<ecosystem>/<package>/<version>
 ```
 
 **Examples:**
+
 - `external://pypi/requests/2.31.0`
 - `external://npm/@types/node/18.15.0`
 - `external://golang.org/x/client-go/v0.28.4`
@@ -146,6 +160,7 @@ external://<ecosystem>/<package>/<version>
 ### Repository Dependencies
 
 #### External Dependencies
+
 - **Predicate:** `depends_on`
 - **From:** Repository
 - **To:** ExternalDependencyVersion
@@ -153,6 +168,7 @@ external://<ecosystem>/<package>/<version>
 - **Cardinality:** One-to-many
 
 #### Internal Dependencies
+
 - **Predicate:** `internal_depends_on`
 - **From:** Repository (dependent)
 - **To:** Repository (dependency)
@@ -162,6 +178,7 @@ external://<ecosystem>/<package>/<version>
 ### Package-Version Relationships
 
 #### Package Versions
+
 - **Predicate:** `has_version`
 - **From:** ExternalDependencyPackage
 - **To:** ExternalDependencyVersion
@@ -206,6 +223,7 @@ Input: external://pypi/requests/2.31.0
 ### Entity Deletion
 
 #### Repository Deletion
+
 When a repository is removed from YAML:
 
 1. **Check internal references:** If other repositories depend on this one, fail with error
@@ -214,7 +232,9 @@ When a repository is removed from YAML:
 4. **Keep external dependency nodes** (never delete external entities)
 
 #### External Dependency Cleanup
+
 External dependencies are never deleted, even when no longer referenced:
+
 - Orphaned ExternalDependencyVersion nodes remain
 - Orphaned ExternalDependencyPackage nodes remain
 - Reference counts may reach zero but nodes persist
@@ -224,6 +244,7 @@ External dependencies are never deleted, even when no longer referenced:
 ### Common Queries
 
 #### Find Repositories by Owner
+
 ```graphql
 query($owner: string) {
   repositories(func: eq(owners, $owner)) {
@@ -236,6 +257,7 @@ query($owner: string) {
 ```
 
 #### Find Repositories Using External Package
+
 ```graphql
 query($package_id: string) {
   package(func: eq(id, $package_id)) {
@@ -252,6 +274,7 @@ query($package_id: string) {
 ```
 
 **Example:**
+
 ```graphql
 # Find all repositories using any version of requests
 query {
@@ -269,6 +292,7 @@ query {
 ```
 
 #### Find Repositories Using Specific Version
+
 ```graphql
 query($version_id: string) {
   version(func: eq(id, $version_id)) {
@@ -283,6 +307,7 @@ query($version_id: string) {
 ```
 
 #### Find Dependencies of Repository
+
 ```graphql
 query($repo_id: string) {
   repository(func: eq(id, $repo_id)) {
@@ -302,6 +327,7 @@ query($repo_id: string) {
 ```
 
 #### Find Repositories in Namespace
+
 ```graphql
 query($namespace: string) {
   repositories(func: eq(namespace, $namespace)) {
@@ -321,6 +347,7 @@ query($namespace: string) {
 ### Analytics Queries
 
 #### Dependency Usage Statistics
+
 ```graphql
 query {
   packages(func: type(ExternalDependencyPackage)) {
@@ -336,6 +363,7 @@ query {
 ```
 
 #### Most Popular External Dependencies
+
 ```graphql
 query {
   versions(func: type(ExternalDependencyVersion), orderdesc: reference_count, first: 10) {
@@ -352,6 +380,7 @@ query {
 ```
 
 #### Repository Dependency Counts
+
 ```graphql
 query {
   repositories(func: type(Repository)) {
@@ -367,16 +396,19 @@ query {
 ## Schema Evolution
 
 ### Version 1.0.0 Schema
+
 Current minimal schema with Repository and ExternalDependency types only.
 
 ### Planned Schema Changes
 
 #### Version 1.1.0 (Additive)
+
 - Add Service node type
 - Add additional node type
 - Maintain backwards compatibility
 
 #### Version 2.0.0 (Breaking)
+
 - Add relationship metadata (criticality, type)
 - Modify dependency relationship structure
 - Provide migration scripts
@@ -384,11 +416,13 @@ Current minimal schema with Repository and ExternalDependency types only.
 ### Migration Strategy
 
 #### Additive Changes
+
 - Add new node types without affecting existing data
 - Add new predicates without removing old ones
 - Extend existing types with new optional fields
 
 #### Breaking Changes
+
 - Export data before migration
 - Apply schema changes
 - Run data transformation scripts
@@ -398,17 +432,20 @@ Current minimal schema with Repository and ExternalDependency types only.
 ## Performance Considerations
 
 ### Indexing Strategy
+
 - **Exact indexes** on frequently queried fields (namespace, owners, ecosystem)
 - **Integer indexes** on numeric fields (reference_count)
 - **Full-text indexes** on searchable content (future enhancement)
 
 ### Query Optimization
+
 - Use specific predicates instead of broad traversals
 - Limit result sets with `first:` parameter
 - Use pagination for large result sets
 - Cache common query results
 
 ### Storage Efficiency
+
 - Package/version separation reduces duplicate version storage
 - Reference counting enables efficient orphan detection
 - Namespace grouping improves query locality
@@ -416,17 +453,20 @@ Current minimal schema with Repository and ExternalDependency types only.
 ## Data Integrity
 
 ### Constraints
+
 - Repository IDs must be unique across all namespaces
 - External dependency IDs must follow canonical format
 - All email addresses must be valid format
 - All URLs must be valid HTTP/HTTPS format
 
 ### Validation Rules
+
 - Reference counts must match actual relationship counts
 - Package-version relationships must be consistent
 - System metadata fields must be properly maintained
 
 ### Consistency Checks
+
 - Periodic validation of reference counts
 - Orphan node detection and reporting
 - Cross-reference validation between related entities
@@ -434,6 +474,7 @@ Current minimal schema with Repository and ExternalDependency types only.
 ## Example Data Structure
 
 ### Complete Repository with Dependencies
+
 ```json
 {
   "uid": "0x1",
@@ -441,10 +482,7 @@ Current minimal schema with Repository and ExternalDependency types only.
   "id": "rosa-hcp/rosa-hcp-service",
   "namespace": "rosa-hcp",
   "name": "rosa-hcp-service",
-  "owners": [
-    "rosa-team@redhat.com",
-    "rosa-leads@redhat.com"
-  ],
+  "owners": ["rosa-team@redhat.com", "rosa-leads@redhat.com"],
   "git_repo_url": "https://github.com/openshift/rosa-hcp-service",
   "depends_on": [
     {
@@ -470,6 +508,7 @@ Current minimal schema with Repository and ExternalDependency types only.
 ```
 
 ### External Dependency Structure
+
 ```json
 {
   "uid": "0x20",

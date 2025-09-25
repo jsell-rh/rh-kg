@@ -26,12 +26,14 @@ entity:
 ### Global Fields
 
 #### schema_version (REQUIRED)
+
 - **Type:** String
 - **Format:** Semantic version (MAJOR.MINOR.PATCH)
 - **Pattern:** `^\d+\.\d+\.\d+$`
 - **Current value:** `"1.0.0"`
 
 **Examples:**
+
 ```yaml
 # Valid
 schema_version: "1.0.0"
@@ -43,12 +45,14 @@ schema_version: 1.0.0      # Must be string
 ```
 
 #### namespace (REQUIRED)
+
 - **Type:** String
 - **Format:** Kebab-case identifier
 - **Pattern:** `^[a-z][a-z0-9_-]*[a-z0-9]$|^[a-z]$`
 - **Purpose:** Groups related entities, prevents naming conflicts
 
 **Examples:**
+
 ```yaml
 # Valid
 namespace: "rosa-hcp"
@@ -68,12 +72,14 @@ namespace: ""              # Cannot be empty
 ### Entity Structure
 
 #### entity (REQUIRED)
+
 - **Type:** Object
 - **Purpose:** Contains all entity definitions
 - **Current entity types:** `repository` only
 - **Future entity types:** `service`, `control_plane_component`, `etc` (planned)
 
 #### entity.repository (OPTIONAL)
+
 - **Type:** Array of repository objects
 - **Purpose:** Define repository entities
 - **Can be empty:** Yes
@@ -93,17 +99,20 @@ entity:
 ```
 
 #### Repository Name (Key)
+
 - **Type:** String (object key)
 - **Format:** Free-form string
 - **Constraints:** Must be unique within namespace
 - **Purpose:** Human-readable repository identifier
 
 #### metadata (REQUIRED)
+
 - **Type:** Object
 - **Purpose:** Repository metadata
 - **Required fields:** `owners`, `git_repo_url`
 
 #### metadata.owners (REQUIRED)
+
 - **Type:** Array of strings
 - **Format:** Email addresses
 - **Validation:** Each string MUST be valid email format
@@ -111,6 +120,7 @@ entity:
 - **Purpose:** Team ownership information
 
 **Examples:**
+
 ```yaml
 # Valid
 owners: ["team@redhat.com"]
@@ -124,12 +134,14 @@ owners: ["team@redhat.com", ""]     # Empty email not allowed
 ```
 
 #### metadata.git_repo_url (REQUIRED)
+
 - **Type:** String
 - **Format:** Valid HTTP/HTTPS URL
 - **Purpose:** Link to source repository
 - **Constraints:** Must be accessible URL format
 
 **Examples:**
+
 ```yaml
 # Valid
 git_repo_url: "https://github.com/openshift/rosa-hcp-service"
@@ -143,16 +155,19 @@ git_repo_url: ""                    # Cannot be empty
 ```
 
 #### depends_on (REQUIRED)
+
 - **Type:** Array of strings
 - **Format:** Dependency reference URIs
 - **Can be empty:** Yes
 - **Purpose:** Declare dependencies on other entities
 
 **Dependency Reference Format:**
+
 - **External dependencies:** `external://<ecosystem>/<package>/<version>`
 - **Internal dependencies:** `internal://<namespace>/<entity-name>`
 
 **Examples:**
+
 ```yaml
 # Valid
 depends_on: []
@@ -172,6 +187,7 @@ depends_on: ["internal://invalid space/lib"]    # Invalid namespace format
 ## Validation Rules
 
 ### Strict Validation Policy
+
 The schema follows a **strict validation policy** for Phase 1:
 
 1. **Unknown fields MUST be rejected** with clear error messages
@@ -180,6 +196,7 @@ The schema follows a **strict validation policy** for Phase 1:
 4. **All dependency references MUST be well-formed URIs**
 
 ### External Dependency Format
+
 External dependencies MUST follow this exact format:
 
 ```
@@ -187,6 +204,7 @@ external://<ecosystem>/<package>/<version>
 ```
 
 **Supported ecosystems:**
+
 - `pypi` - Python packages
 - `npm` - Node.js packages
 - `golang.org/x` - Go modules
@@ -195,6 +213,7 @@ external://<ecosystem>/<package>/<version>
 - `nuget` - .NET packages (future)
 
 **Examples:**
+
 ```yaml
 # Python
 - "external://pypi/requests/2.31.0"
@@ -210,6 +229,7 @@ external://<ecosystem>/<package>/<version>
 ```
 
 ### Internal Dependency Format
+
 Internal dependencies MUST follow this exact format:
 
 ```
@@ -217,6 +237,7 @@ internal://<namespace>/<entity-name>
 ```
 
 **Examples:**
+
 ```yaml
 # Valid
 - "internal://shared-utils/logging-library"
@@ -224,9 +245,9 @@ internal://<namespace>/<entity-name>
 - "internal://rosa-hcp/rosa-operator"
 
 # Invalid
-- "internal://SharedUtils/LoggingLibrary"  # Namespace must be kebab-case
-- "internal://shared-utils"                # Must include entity name
-- "internal:///logging-library"            # Namespace cannot be empty
+- "internal://SharedUtils/LoggingLibrary" # Namespace must be kebab-case
+- "internal://shared-utils" # Must include entity name
+- "internal:///logging-library" # Namespace cannot be empty
 ```
 
 ## Complete Example
@@ -270,6 +291,7 @@ entity:
 Validation errors MUST provide clear, actionable feedback:
 
 ### Unknown Field Error
+
 ```
 ValidationError: Unknown field 'custom_field' in repository 'test-repo'
   Allowed fields: metadata, depends_on
@@ -277,6 +299,7 @@ ValidationError: Unknown field 'custom_field' in repository 'test-repo'
 ```
 
 ### Missing Required Field Error
+
 ```
 ValidationError: Missing required field 'owners' in repository 'test-repo'
   Required fields: owners, git_repo_url
@@ -284,6 +307,7 @@ ValidationError: Missing required field 'owners' in repository 'test-repo'
 ```
 
 ### Invalid Dependency Reference Error
+
 ```
 ValidationError: Invalid dependency reference 'requests' in repository 'test-repo'
   Expected format: external://<ecosystem>/<package>/<version> or internal://<namespace>/<entity>
@@ -292,6 +316,7 @@ ValidationError: Invalid dependency reference 'requests' in repository 'test-rep
 ```
 
 ### Invalid Email Format Error
+
 ```
 ValidationError: Invalid email 'not-an-email' in owners for repository 'test-repo'
   Expected format: user@domain.com
@@ -301,16 +326,19 @@ ValidationError: Invalid email 'not-an-email' in owners for repository 'test-rep
 ## Future Evolution
 
 ### Phase 2 Planned Changes
+
 - Add `service` and other entity type
 - Add operational metadata fields
 - Support for custom metadata with governance
 
 ### Phase 3 Planned Changes
+
 - Add relationship precision (runtime vs build dependencies)
 - Support for temporal modeling
 - Cross-service relationship types
 
 ### Migration Strategy
+
 - Schema version field enables migration tooling
 - Multiple version support during transition periods
 - Automated migration scripts for breaking changes
@@ -319,11 +347,13 @@ ValidationError: Invalid email 'not-an-email' in owners for repository 'test-rep
 ## Backwards Compatibility
 
 ### Version 1.x Compatibility Promise
+
 - Patch versions (1.0.x): No breaking changes
 - Minor versions (1.x.0): Additive changes only
 - Major versions (x.0.0): Breaking changes allowed with migration path
 
 ### Deprecation Policy
+
 - Features marked deprecated for at least one minor version
 - Clear migration guidance provided
 - Automated migration tools when possible

@@ -7,6 +7,7 @@ This specification defines how entity schemas are dynamically loaded, validated,
 ## Schema File Structure
 
 ### File Organization
+
 ```
 schemas/
 ├── base_internal.yaml              # Base schema for internal entities
@@ -20,15 +21,16 @@ schemas/
 ### Schema File Format
 
 #### Base Schema Structure
+
 ```yaml
 schema_type: base_internal|base_external|entity
 schema_version: "1.0.0"
-extends: null|base_internal|base_external    # For entity schemas
-governance: strict|permissive               # For base schemas only
+extends: null|base_internal|base_external # For entity schemas
+governance: strict|permissive # For base schemas only
 
 # Entity-specific fields (for entity schemas)
-entity_type: string                        # Unique entity type name
-description: string                        # Human-readable description
+entity_type: string # Unique entity type name
+description: string # Human-readable description
 
 # Metadata field definitions
 required_metadata:
@@ -54,7 +56,7 @@ relationships:
     direction: inbound|outbound|bidirectional
 
 # Dgraph schema generation
-dgraph_type: string                        # Dgraph type name
+dgraph_type: string # Dgraph type name
 dgraph_predicates:
   predicate_name:
     type: string|"[string]"|uid|"[uid]"|int|float|bool|datetime
@@ -76,6 +78,7 @@ auto_creation:
 ## Schema Loading and Management
 
 ### Schema Loader Interface
+
 ```python
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional
@@ -147,6 +150,7 @@ class SchemaLoader(ABC):
 ```
 
 ### File-Based Schema Loader
+
 ```python
 import yaml
 import os
@@ -244,6 +248,7 @@ class FileSchemaLoader(SchemaLoader):
 ## Dynamic Dgraph Schema Generation
 
 ### Schema Generator
+
 ```python
 class DgraphSchemaGenerator:
     """Generates Dgraph schema from entity schemas."""
@@ -325,6 +330,7 @@ class DgraphSchemaGenerator:
 ## Hot Reload API
 
 ### Schema Reload Endpoint
+
 ```python
 from fastapi import APIRouter, HTTPException
 from typing import Dict, Any
@@ -424,6 +430,7 @@ async def validate_backwards_compatibility(
 ## Schema Validation Integration
 
 ### Dynamic Validator Factory
+
 ```python
 class DynamicValidatorFactory:
     """Creates validators based on loaded schemas."""

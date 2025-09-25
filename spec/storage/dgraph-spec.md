@@ -113,6 +113,7 @@ class StorageInterface(ABC):
 ### Connection Management
 
 #### Configuration
+
 ```python
 from pydantic_settings import BaseSettings
 
@@ -139,6 +140,7 @@ class DgraphSettings(BaseSettings):
 ```
 
 #### Connection Lifecycle
+
 ```python
 class DgraphStorage(StorageInterface):
     """Dgraph implementation of storage interface."""
@@ -209,6 +211,7 @@ class DgraphStorage(StorageInterface):
 ### Schema Management
 
 #### Dynamic Schema Initialization
+
 ```python
 from kg.core.schema_loader import FileSchemaLoader, DgraphSchemaGenerator
 
@@ -241,6 +244,7 @@ async def reload_schema(self) -> None:
 ### Entity Operations
 
 #### Generic Store Entity
+
 ```python
 async def store_entity(
     self,
@@ -347,6 +351,7 @@ async def _process_entity_relationships(
 ```
 
 #### Generic Get Entity
+
 ```python
 async def get_entity(self, entity_type: str, entity_id: str) -> Optional[dict[str, Any]]:
     """Retrieve entity by type and ID using dynamic schema."""
@@ -428,6 +433,7 @@ async def _parse_entity_data(
 ```
 
 #### Generic List Entities
+
 ```python
 async def list_entities(
     self,
@@ -512,6 +518,7 @@ async def _build_list_entities_query(
 ### Dependency Operations
 
 #### Ensure External Dependency
+
 ```python
 async def _ensure_external_dependency(self, dep_ref: str) -> str:
     """Ensure external dependency exists, create if needed."""
@@ -545,6 +552,7 @@ async def _ensure_external_dependency(self, dep_ref: str) -> str:
 ```
 
 #### Generic Find Entities with Relationship
+
 ```python
 async def find_entities_with_relationship(
     self,
@@ -663,6 +671,7 @@ async def _get_entity_query_fields(self, entity_schema: EntitySchema) -> list[st
 ### Analytics Operations
 
 #### Get Entity Relationships
+
 ```python
 async def get_entity_relationships(
     self,
@@ -730,6 +739,7 @@ async def _build_relationships_query(self, entity_schema: EntitySchema) -> str:
 ### Error Handling
 
 #### Custom Exceptions
+
 ```python
 class StorageError(Exception):
     """Base exception for storage operations."""
@@ -753,6 +763,7 @@ class StorageValidationError(StorageError):
 ```
 
 #### Error Handling Patterns
+
 ```python
 async def _handle_dgraph_error(self, error: Exception) -> None:
     """Handle Dgraph-specific errors and convert to storage errors."""
@@ -771,6 +782,7 @@ async def _handle_dgraph_error(self, error: Exception) -> None:
 ### Testing Support
 
 #### Mock Storage Implementation
+
 ```python
 class MockStorage(StorageInterface):
     """In-memory mock storage for testing."""
@@ -897,6 +909,7 @@ class MockStorage(StorageInterface):
 ### Performance Considerations
 
 #### Connection Pooling
+
 ```python
 class DgraphConnectionPool:
     """Connection pool for Dgraph clients."""
@@ -924,6 +937,7 @@ class DgraphConnectionPool:
 ```
 
 #### Query Optimization
+
 ```python
 # Use specific predicates instead of broad traversals
 # Good:

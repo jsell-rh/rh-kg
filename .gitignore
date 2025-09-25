@@ -47,7 +47,6 @@ cover/
 htmlcov/
 
 # IDEs
-.vscode/
 .idea/
 *.swp
 *.swo

@@ -6,11 +6,13 @@ following a specification-driven development approach.
 ## Specification Structure
 
 ### Core Specifications
+
 - `schema-spec.md` - YAML schema format and validation rules
 - `data-model-spec.md` - Dgraph data model and relationships
 - `canonicalization-spec.md` - External dependency naming and ID generation
 
 ### Interface Specifications
+
 - `cli/` - Command-line interface specifications
 - `api/` - REST/GraphQL API specifications
 - `storage/` - Dgraph storage interface specifications

@@ -7,20 +7,24 @@ This specification defines the REST API endpoints for the knowledge graph server
 ## Base Configuration
 
 ### Base URL
+
 ```
 https://kg.redhat.com/api/v1
 ```
 
 ### Content Type
+
 - **Request:** `application/json` or `application/yaml`
 - **Response:** `application/json`
 
 ### Authentication
+
 - **Development:** None (local development)
 - **Production:** Bearer token authentication
 - **Header:** `Authorization: Bearer <token>`
 
 ### Versioning
+
 - **Strategy:** URL path versioning (`/api/v1/`)
 - **Current version:** `v1`
 - **Backwards compatibility:** Maintained within major versions
@@ -32,11 +36,13 @@ https://kg.redhat.com/api/v1
 Submit or update repository data from YAML files.
 
 #### Endpoint
+
 ```http
 POST /api/v1/graph/submit
 ```
 
 #### Request Headers
+
 ```http
 Content-Type: application/yaml
 Authorization: Bearer <token>
@@ -45,6 +51,7 @@ X-Source-Commit: abc123def456
 ```
 
 #### Request Body
+
 ```yaml
 schema_version: "1.0.0"
 namespace: "rosa-hcp"
@@ -58,6 +65,7 @@ entity:
 ```
 
 #### Success Response (200 OK)
+
 ```json
 {
   "status": "success",
@@ -79,6 +87,7 @@ entity:
 ```
 
 #### Validation Error Response (400 Bad Request)
+
 ```json
 {
   "status": "error",
@@ -99,6 +108,7 @@ entity:
 ```
 
 #### Conflict Error Response (409 Conflict)
+
 ```json
 {
   "status": "error",
@@ -116,6 +126,7 @@ entity:
 ```
 
 #### Server Error Response (500 Internal Server Error)
+
 ```json
 {
   "status": "error",
@@ -131,19 +142,23 @@ entity:
 Validate YAML without submitting to the graph.
 
 #### Endpoint
+
 ```http
 POST /api/v1/graph/validate
 ```
 
 #### Request Headers
+
 ```http
 Content-Type: application/yaml
 ```
 
 #### Request Body
+
 Same YAML format as submit endpoint.
 
 #### Success Response (200 OK)
+
 ```json
 {
   "status": "valid",
@@ -160,14 +175,15 @@ Same YAML format as submit endpoint.
     }
   },
   "checks": [
-    {"name": "schema_format", "status": "pass"},
-    {"name": "required_fields", "status": "pass"},
-    {"name": "dependency_references", "status": "pass"}
+    { "name": "schema_format", "status": "pass" },
+    { "name": "required_fields", "status": "pass" },
+    { "name": "dependency_references", "status": "pass" }
   ]
 }
 ```
 
 #### Validation Error Response (400 Bad Request)
+
 Same format as submit endpoint validation errors.
 
 ## Query Endpoints
@@ -177,15 +193,18 @@ Same format as submit endpoint validation errors.
 Retrieve repository information by ID.
 
 #### Endpoint
+
 ```http
 GET /api/v1/repositories/{namespace}/{name}
 ```
 
 #### Path Parameters
+
 - `namespace` (string): Repository namespace
 - `name` (string): Repository name
 
 #### Success Response (200 OK)
+
 ```json
 {
   "status": "success",
@@ -225,6 +244,7 @@ GET /api/v1/repositories/{namespace}/{name}
 ```
 
 #### Not Found Response (404 Not Found)
+
 ```json
 {
   "status": "error",
@@ -239,11 +259,13 @@ GET /api/v1/repositories/{namespace}/{name}
 List repositories with optional filtering.
 
 #### Endpoint
+
 ```http
 GET /api/v1/repositories
 ```
 
 #### Query Parameters
+
 - `namespace` (string, optional): Filter by namespace
 - `owner` (string, optional): Filter by owner email
 - `limit` (integer, optional): Maximum results (default: 50, max: 200)
@@ -252,11 +274,13 @@ GET /api/v1/repositories
 - `order` (string, optional): Sort order (asc, desc, default: asc)
 
 #### Example Request
+
 ```http
 GET /api/v1/repositories?namespace=rosa-hcp&owner=rosa-team@redhat.com&limit=10&sort=updated_at&order=desc
 ```
 
 #### Success Response (200 OK)
+
 ```json
 {
   "status": "success",
@@ -292,15 +316,18 @@ GET /api/v1/repositories?namespace=rosa-hcp&owner=rosa-team@redhat.com&limit=10&
 Get detailed dependency information for a repository.
 
 #### Endpoint
+
 ```http
 GET /api/v1/repositories/{namespace}/{name}/dependencies
 ```
 
 #### Query Parameters
+
 - `type` (string, optional): Filter by dependency type (external, internal, all)
 - `ecosystem` (string, optional): Filter external deps by ecosystem (pypi, npm, etc.)
 
 #### Success Response (200 OK)
+
 ```json
 {
   "status": "success",
@@ -339,25 +366,30 @@ GET /api/v1/repositories/{namespace}/{name}/dependencies
 Find repositories that depend on a specific external package.
 
 #### Endpoint
+
 ```http
 GET /api/v1/packages/{ecosystem}/{package}/dependents
 ```
 
 #### Path Parameters
+
 - `ecosystem` (string): Package ecosystem (pypi, npm, etc.)
 - `package` (string): Package name
 
 #### Query Parameters
+
 - `version` (string, optional): Specific version (if omitted, shows all versions)
 - `limit` (integer, optional): Maximum results
 - `offset` (integer, optional): Results offset
 
 #### Example Request
+
 ```http
 GET /api/v1/packages/pypi/requests/dependents?version=2.31.0&limit=20
 ```
 
 #### Success Response (200 OK)
+
 ```json
 {
   "status": "success",
@@ -399,11 +431,13 @@ GET /api/v1/packages/pypi/requests/dependents?version=2.31.0&limit=20
 Check system health and readiness.
 
 #### Endpoint
+
 ```http
 GET /api/v1/health
 ```
 
 #### Success Response (200 OK)
+
 ```json
 {
   "status": "healthy",
@@ -424,6 +458,7 @@ GET /api/v1/health
 ```
 
 #### Unhealthy Response (503 Service Unavailable)
+
 ```json
 {
   "status": "unhealthy",
@@ -442,11 +477,13 @@ GET /api/v1/health
 Get system version and configuration information.
 
 #### Endpoint
+
 ```http
 GET /api/v1/info
 ```
 
 #### Success Response (200 OK)
+
 ```json
 {
   "status": "success",
@@ -493,46 +530,56 @@ All errors follow this standard format:
 #### Client Errors (4xx)
 
 **400 Bad Request**
+
 - `validation_error`: YAML validation failed
 - `invalid_request`: Malformed request
 - `unsupported_schema`: Unsupported schema version
 
 **401 Unauthorized**
+
 - `authentication_required`: Missing or invalid authentication
 - `token_expired`: Authentication token expired
 
 **403 Forbidden**
+
 - `insufficient_permissions`: User lacks required permissions
 - `rate_limit_exceeded`: Request rate limit exceeded
 
 **404 Not Found**
+
 - `not_found`: Requested resource not found
 - `endpoint_not_found`: API endpoint does not exist
 
 **409 Conflict**
+
 - `ownership_conflict`: Entity ownership conflict
 - `namespace_conflict`: Namespace ownership conflict
 
 **422 Unprocessable Entity**
+
 - `dependency_not_found`: Referenced dependency does not exist
 - `circular_dependency`: Circular dependency detected
 
 #### Server Errors (5xx)
 
 **500 Internal Server Error**
+
 - `internal_error`: Unexpected server error
 - `database_error`: Database operation failed
 
 **502 Bad Gateway**
+
 - `upstream_error`: Dependency service unavailable
 
 **503 Service Unavailable**
+
 - `maintenance_mode`: System in maintenance mode
 - `overloaded`: System temporarily overloaded
 
 ## Rate Limiting
 
 ### Rate Limit Headers
+
 ```http
 X-RateLimit-Limit: 100
 X-RateLimit-Remaining: 95
@@ -540,6 +587,7 @@ X-RateLimit-Reset: 1642262400
 ```
 
 ### Rate Limit Response (429 Too Many Requests)
+
 ```json
 {
   "status": "error",
@@ -558,6 +606,7 @@ X-RateLimit-Reset: 1642262400
 ### Complete Submit Example
 
 #### Request
+
 ```http
 POST /api/v1/graph/submit HTTP/1.1
 Host: kg.redhat.com
@@ -583,6 +632,7 @@ entity:
 ```
 
 #### Response
+
 ```http
 HTTP/1.1 200 OK
 Content-Type: application/json
@@ -610,6 +660,7 @@ X-Request-ID: req_abc123def456
 ## OpenAPI Specification
 
 The complete OpenAPI 3.0 specification will be available at:
+
 ```
 GET /api/v1/openapi.json
 ```

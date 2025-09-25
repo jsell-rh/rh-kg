@@ -27,12 +27,14 @@ The validation process follows a strict pipeline with early exit on critical fai
 ### Validation Modes
 
 #### Strict Mode (Default)
+
 - Reject unknown fields at any level
 - Enforce all format constraints
 - Require all mandatory fields
 - Validate all dependency references
 
 #### Permissive Mode (Future)
+
 - Warn on unknown fields but don't fail
 - Allow missing optional fields
 - Skip reference validation
@@ -42,9 +44,11 @@ The validation process follows a strict pipeline with early exit on critical fai
 ### Layer 1: YAML Syntax Validation
 
 #### Purpose
+
 Ensure the input is valid YAML before processing.
 
 #### Implementation
+
 ```python
 import yaml
 from typing import Any, Optional
@@ -74,6 +78,7 @@ class YamlSyntaxValidator:
 ```
 
 #### Error Examples
+
 ```yaml
 # Invalid YAML - unclosed quote
 schema_version: "1.0.0
@@ -89,9 +94,11 @@ namespace: test
 ### Layer 2: Schema Structure Validation
 
 #### Purpose
+
 Validate top-level structure and schema version compatibility.
 
 #### Implementation
+
 ```python
 class SchemaStructureValidator:
     """Validates schema structure and version."""
@@ -137,9 +144,11 @@ class SchemaStructureValidator:
 ### Layer 3: Field Format Validation
 
 #### Purpose
+
 Validate individual field formats and constraints using Pydantic models.
 
 #### Implementation
+
 ```python
 from pydantic import ValidationError as PydanticValidationError
 from kg.core.models import KnowledgeGraphFile
@@ -237,9 +246,11 @@ class FieldFormatValidator:
 ### Layer 4: Business Logic Validation
 
 #### Purpose
+
 Validate business rules and cross-field constraints.
 
 #### Implementation
+
 ```python
 class BusinessLogicValidator:
     """Validates business rules and constraints."""
@@ -376,9 +387,11 @@ class BusinessLogicValidator:
 ### Layer 5: Reference Validation (Optional)
 
 #### Purpose
+
 Validate that referenced entities actually exist in the knowledge graph.
 
 #### Implementation
+
 ```python
 from typing import Protocol
 
@@ -554,7 +567,9 @@ class ValidationResult:
 ## Error Message Standards
 
 ### Error Message Format
+
 All error messages MUST follow this format:
+
 - **Type**: Machine-readable error type
 - **Message**: Human-readable description
 - **Help**: Actionable guidance for fixing the error
@@ -563,6 +578,7 @@ All error messages MUST follow this format:
 ### Error Message Examples
 
 #### Schema Errors
+
 ```python
 ValidationError(
     type="missing_required_field",
@@ -574,6 +590,7 @@ ValidationError(
 ```
 
 #### Format Errors
+
 ```python
 ValidationError(
     type="invalid_email_format",
@@ -585,6 +602,7 @@ ValidationError(
 ```
 
 #### Business Logic Errors
+
 ```python
 ValidationError(
     type="invalid_dependency_reference",
@@ -598,6 +616,7 @@ ValidationError(
 ## Testing Strategy
 
 ### Unit Test Coverage
+
 ```python
 class TestValidationLayers:
     """Test each validation layer independently."""
@@ -639,6 +658,7 @@ class TestValidationLayers:
 ```
 
 ### Integration Test Coverage
+
 ```python
 class TestValidationIntegration:
     """Test complete validation pipeline."""
