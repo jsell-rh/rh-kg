@@ -84,8 +84,7 @@ The command MUST use these exact exit codes:
 
 - **0:** Validation successful, no errors
 - **1:** Validation failed, errors found
-- **2:** File not found or not readable
-- **3:** Invalid command line arguments
+- **2:** File not found, not readable, or invalid command line arguments
 - **4:** Internal error (unexpected failures)
 
 ## Output Format
@@ -226,7 +225,7 @@ Help: Create a knowledge-graph.yaml file or specify a different path
 Example: kg validate /path/to/your/graph.yaml
 ```
 
-### Invalid Arguments (Exit Code 3)
+### Invalid Arguments (Exit Code 2)
 
 ```
 ❌ Invalid arguments

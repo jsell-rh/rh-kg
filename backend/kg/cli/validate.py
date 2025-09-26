@@ -392,45 +392,7 @@ def _output_yaml_format(
     click.echo(yaml.dump(output, default_flow_style=False, sort_keys=False))
 
 
-@click.command("validate")
-@click.argument(
-    "file",
-    type=click.Path(exists=False),
-    required=False,
-    default="knowledge-graph.yaml",
-    help="**Path to YAML file to validate** (default: knowledge-graph.yaml)",
-)
-@click.option(
-    "--schema-version",
-    type=str,
-    help="🔢 **Expected schema version** to validate against",
-    metavar="VERSION",
-)
-@click.option(
-    "--strict",
-    is_flag=True,
-    help="⚡ **Enable strict mode** - warnings become errors",
-)
-@click.option(
-    "--format",
-    type=click.Choice(["table", "compact", "json", "yaml"]),
-    default="table",
-    help="📋 **Output format** for validation results",
-    show_default=True,
-)
-@click.option(
-    "--verbose",
-    "-v",
-    is_flag=True,
-    help="🔍 **Show detailed information** - file size, parse time, dependency count",
-)
-@click.option(
-    "--force-colors",
-    is_flag=True,
-    help="🎨 **Force colored output** - useful for testing rich formatting",
-    hidden=True,  # Hide from main help but available for testing
-)
-def validate_command(  # noqa: PLR0912, PLR0915
+def _validate_implementation(  # noqa: PLR0912, PLR0915
     file: str,
     schema_version: str | None,
     strict: bool,
@@ -456,8 +418,7 @@ def validate_command(  # noqa: PLR0912, PLR0915
     **Exit Codes:**
     - `0`: Validation successful ✅
     - `1`: Validation failed ❌
-    - `2`: File not found 📁
-    - `3`: Invalid arguments ⚠️
+    - `2`: File not found, not readable, or invalid command line arguments 📁⚠️
     - `4`: Internal error 💥
     """
     # Convert file path to Path object
@@ -649,9 +610,6 @@ def validate_command(  # noqa: PLR0912, PLR0915
         # Exit with appropriate code
         sys.exit(0 if final_result.is_valid else 1)
 
-    except click.ClickException:
-        # Let Click handle its own exceptions (invalid arguments)
-        sys.exit(3)
     except KeyboardInterrupt:
         if format == "json":
             error_output = {
@@ -680,3 +638,75 @@ def validate_command(  # noqa: PLR0912, PLR0915
                 click.echo("\nFull traceback:")
                 click.echo(traceback.format_exc())
         sys.exit(4)
+
+
+@click.command("validate")
+@click.argument(
+    "file",
+    type=click.Path(exists=False),
+    required=False,
+    default="knowledge-graph.yaml",
+    help="**Path to YAML file to validate** (default: knowledge-graph.yaml)",
+)
+@click.option(
+    "--schema-version",
+    type=str,
+    help="🔢 **Expected schema version** to validate against",
+    metavar="VERSION",
+)
+@click.option(
+    "--strict",
+    is_flag=True,
+    help="⚡ **Enable strict mode** - warnings become errors",
+)
+@click.option(
+    "--format",
+    type=click.Choice(["table", "compact", "json", "yaml"]),
+    default="table",
+    help="📋 **Output format** for validation results",
+    show_default=True,
+)
+@click.option(
+    "--verbose",
+    "-v",
+    is_flag=True,
+    help="🔍 **Show detailed information** - file size, parse time, dependency count",
+)
+@click.option(
+    "--force-colors",
+    is_flag=True,
+    help="🎨 **Force colored output** - useful for testing rich formatting",
+    hidden=True,  # Hide from main help but available for testing
+)
+def validate_command(
+    file: str,
+    schema_version: str | None,
+    strict: bool,
+    format: str,
+    verbose: bool,
+    force_colors: bool,
+) -> None:
+    """🔍 **Validate a knowledge graph YAML file**
+
+    Validates your knowledge graph file against the schema specification.
+    Provides detailed error reporting with helpful suggestions.
+
+    **Examples:**
+
+    ```bash
+    kg validate                          # Validate knowledge-graph.yaml
+    kg validate my-graph.yaml            # Validate specific file
+    kg validate --format json            # JSON output
+    kg validate --verbose                # Detailed information
+    kg validate --strict                 # Strict mode (warnings as errors)
+    ```
+
+    **Exit Codes:**
+    - `0`: Validation successful ✅
+    - `1`: Validation failed ❌
+    - `2`: File not found, not readable, or invalid command line arguments 📁⚠️
+    - `4`: Internal error 💥
+    """
+    _validate_implementation(
+        file, schema_version, strict, format, verbose, force_colors
+    )

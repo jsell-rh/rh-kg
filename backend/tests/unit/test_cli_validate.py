@@ -14,6 +14,50 @@ import pytest
 from kg.cli.validate import validate_command
 
 
+# Global fixtures for all test classes
+@pytest.fixture
+def runner():
+    """Create CLI runner for tests."""
+    return CliRunner()
+
+
+@pytest.fixture
+def temp_dir():
+    """Create temporary directory for test files."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        yield Path(tmpdir)
+
+
+@pytest.fixture
+def valid_yaml_content():
+    """Valid YAML content for testing."""
+    return """
+schema_version: "1.0.0"
+namespace: "test-project"
+entity:
+  repository:
+    - test-repo:
+        owners: ["team@company.com"]
+        git_repo_url: "https://github.com/company/test-repo"
+        depends_on:
+          - "external://pypi/requests/2.31.0"
+"""
+
+
+@pytest.fixture
+def invalid_yaml_content():
+    """Invalid YAML content for testing."""
+    return """
+schema_version: "2.0.0"  # Unsupported version
+namespace: "test-project"
+entity:
+  repository:
+    - test-repo:
+        owners: []  # Empty array
+        git_repo_url: "not-a-url"  # Invalid URL
+"""
+
+
 class TestCLIValidateBasics:
     """Test basic CLI validation command functionality."""
 
@@ -27,52 +71,9 @@ class TestCLIValidateBasics:
         runner = CliRunner()
         assert runner is not None
 
-    @pytest.fixture
-    def runner(self):
-        """Create CLI runner for tests."""
-        return CliRunner()
-
-    @pytest.fixture
-    def temp_dir(self):
-        """Create temporary directory for test files."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            yield Path(tmpdir)
-
-    @pytest.fixture
-    def valid_yaml_content(self):
-        """Valid YAML content for testing."""
-        return """
-schema_version: "1.0.0"
-namespace: "test-project"
-entity:
-  repository:
-    - test-repo:
-        owners: ["team@company.com"]
-        git_repo_url: "https://github.com/company/test-repo"
-        depends_on:
-          - "external://pypi/requests/2.31.0"
-"""
-
-    @pytest.fixture
-    def invalid_yaml_content(self):
-        """Invalid YAML content for testing."""
-        return """
-schema_version: "2.0.0"  # Unsupported version
-namespace: "test-project"
-entity:
-  repository:
-    - test-repo:
-        owners: []  # Empty array
-        git_repo_url: "not-a-url"  # Invalid URL
-"""
-
 
 class TestCLIArgumentParsing:
     """Test command line argument parsing."""
-
-    @pytest.fixture
-    def runner(self):
-        return CliRunner()
 
     def test_validate_with_no_arguments_uses_default_file(self, runner):
         """Test that validate with no args looks for knowledge-graph.yaml."""
@@ -131,25 +132,16 @@ class TestCLIArgumentParsing:
             assert result.exit_code in [0, 1]
 
     def test_invalid_format_option_fails(self, runner):
-        """Test that invalid format option fails with exit code 3."""
+        """Test that invalid format option fails with exit code 2."""
         result = runner.invoke(
             validate_command, ["nonexistent.yaml", "--format", "invalid"]
         )
-        assert result.exit_code == 3
+        assert result.exit_code == 2
         assert "Invalid" in result.output or "invalid" in result.output
 
 
 class TestCLIExitCodes:
     """Test CLI exit codes match specification."""
-
-    @pytest.fixture
-    def runner(self):
-        return CliRunner()
-
-    @pytest.fixture
-    def temp_dir(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            yield Path(tmpdir)
 
     def test_exit_code_0_on_valid_file(self, runner, temp_dir, valid_yaml_content):
         """Test exit code 0 for successful validation."""
@@ -172,23 +164,14 @@ class TestCLIExitCodes:
         result = runner.invoke(validate_command, ["nonexistent.yaml"])
         assert result.exit_code == 2
 
-    def test_exit_code_3_on_invalid_arguments(self, runner):
-        """Test exit code 3 for invalid arguments."""
+    def test_exit_code_2_on_invalid_arguments(self, runner):
+        """Test exit code 2 for invalid arguments."""
         result = runner.invoke(validate_command, ["--invalid-option"])
-        assert result.exit_code == 3
+        assert result.exit_code == 2
 
 
 class TestCLIOutputFormats:
     """Test different CLI output formats."""
-
-    @pytest.fixture
-    def runner(self):
-        return CliRunner()
-
-    @pytest.fixture
-    def temp_dir(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            yield Path(tmpdir)
 
     def test_table_format_success(self, runner, temp_dir, valid_yaml_content):
         """Test table format for successful validation."""
@@ -260,15 +243,6 @@ class TestCLIOutputFormats:
 class TestCLIVerboseMode:
     """Test verbose mode functionality."""
 
-    @pytest.fixture
-    def runner(self):
-        return CliRunner()
-
-    @pytest.fixture
-    def temp_dir(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            yield Path(tmpdir)
-
     def test_verbose_mode_success_shows_details(
         self, runner, temp_dir, valid_yaml_content
     ):
@@ -298,15 +272,6 @@ class TestCLIVerboseMode:
 
 class TestCLIErrorMessages:
     """Test error message formatting and helpfulness."""
-
-    @pytest.fixture
-    def runner(self):
-        return CliRunner()
-
-    @pytest.fixture
-    def temp_dir(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            yield Path(tmpdir)
 
     def test_file_not_found_error_message(self, runner):
         """Test file not found error provides helpful message."""
@@ -358,15 +323,6 @@ entity:
 class TestCLIIntegrationWithValidationEngine:
     """Test CLI integration with the existing validation engine."""
 
-    @pytest.fixture
-    def runner(self):
-        return CliRunner()
-
-    @pytest.fixture
-    def temp_dir(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            yield Path(tmpdir)
-
     def test_cli_uses_real_schemas(self, runner, temp_dir):
         """Test CLI loads and uses real schemas from spec directory."""
         # Create a YAML file with real repository structure
@@ -409,15 +365,6 @@ entity:
 class TestCLIPerformance:
     """Test CLI performance requirements."""
 
-    @pytest.fixture
-    def runner(self):
-        return CliRunner()
-
-    @pytest.fixture
-    def temp_dir(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            yield Path(tmpdir)
-
     def test_validation_completes_quickly(self, runner, temp_dir, valid_yaml_content):
         """Test validation completes in reasonable time."""
         test_file = temp_dir / "performance-test.yaml"
@@ -432,34 +379,3 @@ class TestCLIPerformance:
         # Should complete within 5 seconds (generous for CI)
         assert (end_time - start_time) < 5.0
         assert result.exit_code in [0, 1]
-
-
-# Integration fixtures for easier testing
-@pytest.fixture
-def valid_yaml_content():
-    """Valid YAML content for testing."""
-    return """
-schema_version: "1.0.0"
-namespace: "test-project"
-entity:
-  repository:
-    - test-repo:
-        owners: ["team@company.com"]
-        git_repo_url: "https://github.com/company/test-repo"
-        depends_on:
-          - "external://pypi/requests/2.31.0"
-"""
-
-
-@pytest.fixture
-def invalid_yaml_content():
-    """Invalid YAML content for testing."""
-    return """
-schema_version: "2.0.0"  # Unsupported version
-namespace: "test-project"
-entity:
-  repository:
-    - test-repo:
-        owners: []  # Empty array
-        git_repo_url: "not-a-url"  # Invalid URL
-"""
