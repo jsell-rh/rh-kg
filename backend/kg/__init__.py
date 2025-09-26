@@ -5,8 +5,7 @@ __author__ = "John Sell"
 __email__ = "jsell@redhat.com"
 
 # Re-export main components for easy access
-from kg.cli import *  # noqa: F403
-from kg.core import *  # noqa: F403
+# Note: CLI components imported on-demand to avoid dependency issues
 
 __all__ = [
     "__author__",

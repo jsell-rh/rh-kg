@@ -275,7 +275,7 @@ class FieldFormatValidator:
                 field=field,
                 entity=final_entity,
                 message=self._format_message(message, location, final_entity),
-                help=self._get_help_text(mapped_type, field),
+                help=self._get_help_text(mapped_type, field, final_entity),
             )
             errors.append(validation_error)
 
@@ -288,6 +288,8 @@ class FieldFormatValidator:
             "value_error.email": "invalid_email_format",
             "value_error.url": "invalid_url_format",
             "value_error.list.min_items": "empty_required_array",
+            "list_type": "invalid_field_type",
+            "url_type": "invalid_field_type",
             "type_error.str": "invalid_field_type",
             "type_error.integer": "invalid_field_type",
             "type_error.bool": "invalid_field_type",
@@ -296,8 +298,9 @@ class FieldFormatValidator:
             "string_too_short": "field_too_short",
             "string_too_long": "field_too_long",
             "string_pattern_mismatch": "pattern_mismatch",
+            "too_short": "empty_required_array",
         }
-        return mapping.get(pydantic_type, "validation_error")
+        return mapping.get(pydantic_type, "invalid_field_type")
 
     def _extract_context(
         self, location: tuple[Any, ...]
@@ -309,11 +312,16 @@ class FieldFormatValidator:
         field = None
         entity = None
 
-        # Location is a tuple like ('entity', 'repository', 0, 'repo-name', 'metadata', 'owners')
+        # For our dynamic models, locations are typically simple: ('field_name',)
+        # The entity context comes from the entity_name parameter passed to _convert_pydantic_errors
+        if len(location) >= 1:
+            field = str(location[0])  # First element is the field name
+
+        # For complex paths like ('entity', 'repository', 0, 'repo-name', 'owners')
         if len(location) >= 4:
             entity = str(location[3])  # The entity name
-        if len(location) >= 2:
-            field = str(location[-1])  # The last element is typically the field name
+            if len(location) >= 5:
+                field = str(location[4])  # The field name in complex paths
 
         return field, entity
 
@@ -325,8 +333,34 @@ class FieldFormatValidator:
             return f"{message} in entity '{entity}'"
         return message
 
-    def _get_help_text(self, error_type: str, field: str | None) -> str:
+    def _get_help_text(  # noqa: PLR0911
+        self, error_type: str, field: str | None, entity_name: str | None = None
+    ) -> str:
         """Get helpful guidance text for different error types."""
+        # Enhanced help for missing fields with type information
+        if error_type == "missing_required_field" and field and entity_name:
+            field_info = self._get_field_info(field, entity_name)
+            if field_info:
+                return f"Field '{field}' is required. Expected: {field_info}"
+            else:
+                return f"Field '{field}' is required and cannot be empty"
+
+        # Enhanced help for invalid field types
+        if error_type == "invalid_field_type" and field and entity_name:
+            field_info = self._get_field_info(field, entity_name)
+            if field_info:
+                return f"Field '{field}' has wrong type. Expected: {field_info}"
+            else:
+                return f"Field '{field}' has incorrect data type"
+
+        # Enhanced help for empty arrays
+        if error_type == "empty_required_array" and field and entity_name:
+            field_info = self._get_field_info(field, entity_name)
+            if field_info:
+                return f"Field '{field}' cannot be empty. Expected: {field_info}"
+            else:
+                return "Array cannot be empty"
+
         help_texts = {
             "missing_required_field": f"Field '{field}' is required and cannot be empty",
             "invalid_email_format": "Email must be in valid format (user@domain.com)",
@@ -338,6 +372,59 @@ class FieldFormatValidator:
             "pattern_mismatch": "Value does not match the required pattern",
         }
         return help_texts.get(error_type, "Check the field value and try again")
+
+    def _get_field_info(self, field_name: str, _entity_name: str) -> str | None:  # noqa: PLR0912
+        """Get detailed field information for help messages."""
+        # Find the entity type from the entity_name context
+        # We need to look through our schemas to find field definitions
+        for _entity_type, schema in self.entity_schemas.items():
+            # Check all field types in the schema
+            all_fields = (
+                schema.required_fields + schema.optional_fields + schema.readonly_fields
+            )
+
+            for field_def in all_fields:
+                if field_def.name == field_name:
+                    # Build detailed field info
+                    field_info_parts = []
+
+                    # Basic type
+                    if field_def.type == "array":
+                        if field_def.items:
+                            field_info_parts.append(f"array of {field_def.items}")
+                        else:
+                            field_info_parts.append("array")
+                    else:
+                        field_info_parts.append(field_def.type)
+
+                    # Validation requirements
+                    if field_def.validation:
+                        if field_def.validation == "email":
+                            field_info_parts.append("(valid email address)")
+                        elif field_def.validation == "url":
+                            field_info_parts.append("(valid URL)")
+                        elif (
+                            field_def.validation == "enum" and field_def.allowed_values
+                        ):
+                            values = ", ".join(field_def.allowed_values)
+                            field_info_parts.append(f"(one of: {values})")
+
+                    # Array constraints
+                    if field_def.type == "array" and field_def.min_items:
+                        if field_def.min_items == 1:
+                            field_info_parts.append("(at least 1 item)")
+                        else:
+                            field_info_parts.append(
+                                f"(at least {field_def.min_items} items)"
+                            )
+
+                    # Pattern constraints
+                    if field_def.pattern:
+                        field_info_parts.append(f"(pattern: {field_def.pattern})")
+
+                    return " ".join(field_info_parts)
+
+        return None
 
 
 class BusinessLogicValidator:

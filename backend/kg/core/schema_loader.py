@@ -319,6 +319,10 @@ class FileSchemaLoader(SchemaLoader):
                 schema_data.get("relationships", {})
             )
 
+            # Convert relationships to optional fields for validation purposes
+            relationship_fields = self._convert_relationships_to_fields(relationships)
+            optional_fields.extend(relationship_fields)
+
             return EntitySchema(
                 entity_type=schema_data["entity_type"],
                 schema_version=schema_data["schema_version"],
@@ -398,6 +402,32 @@ class FileSchemaLoader(SchemaLoader):
             relationships.append(rel_def)
 
         return relationships
+
+    def _convert_relationships_to_fields(
+        self, relationships: list[RelationshipDefinition]
+    ) -> list[FieldDefinition]:
+        """Convert relationships to optional fields for validation purposes.
+
+        Args:
+            relationships: List of relationship definitions
+
+        Returns:
+            List of FieldDefinition objects for relationships
+        """
+        fields = []
+
+        for relationship in relationships:
+            # Create field definition for the relationship
+            field_def = FieldDefinition(
+                name=relationship.name,
+                type="array",
+                items="string",
+                required=False,
+                description=relationship.description,
+            )
+            fields.append(field_def)
+
+        return fields
 
     def get_load_result(self) -> SchemaLoadResult | None:
         """Get detailed result of last schema load operation.

@@ -37,6 +37,7 @@ repos:
           - pydantic>=2.8.0
           - fastapi>=0.111.0
           - click>=8.1.7
+          - rich-click>=1.8.0
         args: [--strict, --ignore-missing-imports]
         files: ^backend/
         exclude: ^backend/(tests/|docs/)
