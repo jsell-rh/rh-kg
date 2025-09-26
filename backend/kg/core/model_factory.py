@@ -6,7 +6,7 @@ mapping, validation rules, and generates complete YAML validation models.
 """
 
 from datetime import datetime
-from typing import Any, Literal, Union
+from typing import Any
 
 from pydantic import (
     BaseModel,
@@ -20,6 +20,26 @@ from pydantic import (
 
 from .schema import EntitySchema, FieldDefinition
 
+# Type alias for all possible field types used in Pydantic model creation
+FieldType = (
+    # Base types from _type_mappings
+    type[str]
+    | type[int]
+    | type[bool]
+    | type[datetime]
+    | type[dict[str, Any]]  # For object fields
+    | type[list[Any]]  # For generic array fields
+    # Pydantic validation types
+    | type[EmailStr]
+    | type[HttpUrl]
+    # Specific array types
+    | type[list[str]]
+    | type[list[int]]
+    | type[list[bool]]
+    | type[list[datetime]]
+    | type[list[EmailStr]]
+)
+
 
 class DynamicModelFactory:
     """Factory for creating Pydantic models from EntitySchema definitions.
@@ -29,7 +49,7 @@ class DynamicModelFactory:
     specifications.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the model factory with type mappings."""
         self._type_mappings: dict[str, type] = {
             "string": str,
@@ -37,6 +57,7 @@ class DynamicModelFactory:
             "boolean": bool,
             "datetime": datetime,
             "array": list,
+            "object": dict,
         }
 
         self._validation_mappings = {
@@ -71,23 +92,44 @@ class DynamicModelFactory:
         # Process required fields
         for field_def in schema.required_fields:
             field_type, field_constraints = self._convert_field_definition(field_def)
+            # Handle enum validation separately
+            enum_values = field_constraints.pop("_enum_values", None)
+            if enum_values:
+                # Create validator for enum field
+                validators[f"validate_{field_def.name}"] = self._create_enum_validator(
+                    field_def.name, enum_values
+                )
             field_definitions[field_def.name] = (field_type, Field(**field_constraints))
 
         # Process optional fields
         for field_def in schema.optional_fields:
             field_type, field_constraints = self._convert_field_definition(field_def)
+            # Handle enum validation separately
+            enum_values = field_constraints.pop("_enum_values", None)
+            if enum_values:
+                # Create validator for enum field
+                validators[f"validate_{field_def.name}"] = self._create_enum_validator(
+                    field_def.name, enum_values
+                )
             # Make optional fields truly optional with default None
             field_definitions[field_def.name] = (
-                Union[field_type, None],
+                field_type | None,
                 Field(default=None, **field_constraints),
             )
 
         # Process readonly fields
         for field_def in schema.readonly_fields:
             field_type, field_constraints = self._convert_field_definition(field_def)
+            # Handle enum validation separately
+            enum_values = field_constraints.pop("_enum_values", None)
+            if enum_values:
+                # Create validator for enum field
+                validators[f"validate_{field_def.name}"] = self._create_enum_validator(
+                    field_def.name, enum_values
+                )
             # Readonly fields are optional and typically set by the system
             field_definitions[field_def.name] = (
-                Union[field_type, None],
+                field_type | None,
                 Field(default=None, **field_constraints),
             )
 
@@ -128,12 +170,11 @@ class DynamicModelFactory:
         # Create entity container model
         entity_container_fields = {}
 
-        for entity_type, schema in schemas.items():
-            entity_model = self.create_entity_model(schema)
-            # Each entity type is an optional list of entity instances
+        for entity_type, _schema in schemas.items():
+            # Each entity type is an optional list of entity dictionaries
             entity_container_fields[entity_type] = (
-                Union[list[dict[str, entity_model]], None],
-                Field(default=None, description=f"List of {entity_type} entities"),
+                list[dict[str, Any]] | None,
+                None,  # Default value
             )
 
         # Create EntityContainer model
@@ -143,10 +184,10 @@ class DynamicModelFactory:
                 validate_assignment=True,
             )
 
-        EntityContainer = create_model(
+        EntityContainer = create_model(  # type: ignore[call-overload]
             "EntityContainer",
-            **entity_container_fields,
             __base__=EntityBaseModel,
+            **entity_container_fields,
         )
 
         # Create validators for the root model
@@ -218,7 +259,7 @@ class DynamicModelFactory:
 
     def _convert_field_definition(
         self, field_def: FieldDefinition
-    ) -> tuple[type[Any], dict[str, Any]]:
+    ) -> tuple[FieldType, dict[str, Any]]:
         """Convert a FieldDefinition to Pydantic field type and constraints.
 
         Args:
@@ -230,54 +271,102 @@ class DynamicModelFactory:
         Raises:
             ValueError: If field type or validation is unsupported
         """
-        # Start with base type
+        base_type = self._get_base_type(field_def)
+        field_type = self._apply_validation_type(base_type, field_def)
+        field_type = self._apply_array_type(field_type, field_def)
+        constraints = self._build_field_constraints(field_def)
+
+        return field_type, constraints
+
+    def _get_base_type(self, field_def: FieldDefinition) -> type[Any]:
+        """Get the base Python type for a field definition."""
         base_type = self._type_mappings.get(field_def.type)
         if base_type is None:
             raise ValueError(f"Unsupported field type: {field_def.type}")
+        return base_type
 
+    def _apply_validation_type(
+        self, base_type: type[Any], field_def: FieldDefinition
+    ) -> FieldType:
+        """Apply validation rules to get the appropriate type."""
         field_type = base_type
+
+        # Handle validation rules
+        if field_def.validation == "email":
+            field_type = EmailStr
+        elif field_def.validation == "url":
+            field_type = HttpUrl
+        elif field_def.validation == "enum":
+            # Keep base type for enum, validation handled by custom validator
+            field_type = base_type
+
+        return field_type
+
+    def _apply_array_type(
+        self, field_type: FieldType, field_def: FieldDefinition
+    ) -> FieldType:
+        """Convert type to array type if needed."""
+        if field_def.type != "array":
+            return field_type
+
+        return self._get_array_type(field_type, field_def)
+
+    def _get_array_type(  # noqa: PLR0911
+        self, field_type: FieldType, field_def: FieldDefinition
+    ) -> FieldType:
+        """Get the appropriate array type for the field."""
+        # Handle specific array item types based on items field
+        if field_def.items:
+            match field_def.items:
+                case "string":
+                    return (
+                        list[EmailStr] if field_def.validation == "email" else list[str]
+                    )
+                case "integer":
+                    return list[int]
+                case "boolean":
+                    return list[bool]
+                case "datetime":
+                    return list[datetime]
+                case _:
+                    return list[str]
+
+        # Handle based on field_type when items not specified
+        if field_type is EmailStr:
+            return list[EmailStr]
+        elif field_type is str:
+            return list[str]
+        return list[Any]
+
+    def _build_field_constraints(self, field_def: FieldDefinition) -> dict[str, Any]:
+        """Build Pydantic field constraints."""
         constraints: dict[str, Any] = {}
 
         # Add description
         if field_def.description:
             constraints["description"] = field_def.description
 
-        # Handle array types
+        # Array constraints
         if field_def.type == "array":
-            if field_def.items:
-                item_type = self._type_mappings.get(field_def.items, str)
-                field_type = list[item_type]
-            else:
-                field_type = list[str]  # Default to list of strings
-
-            # Add array constraints
             if field_def.min_items is not None:
                 constraints["min_length"] = field_def.min_items
             if field_def.max_items is not None:
                 constraints["max_length"] = field_def.max_items
 
-        # Handle string constraints
+        # String constraints
         elif field_def.type == "string":
             if field_def.min_length is not None:
                 constraints["min_length"] = field_def.min_length
             if field_def.max_length is not None:
                 constraints["max_length"] = field_def.max_length
-
-            # Handle regex pattern
             if field_def.pattern:
                 constraints["pattern"] = field_def.pattern
 
-        # Handle validation rules
-        if field_def.validation:
-            if field_def.validation == "email":
-                field_type = list[EmailStr] if field_def.type == "array" else EmailStr
-            elif field_def.validation == "url":
-                field_type = HttpUrl
-            elif field_def.validation == "enum" and field_def.allowed_values:
-                # Create Literal type for enum validation
-                field_type = Literal[tuple(field_def.allowed_values)]
+        # Handle enum validation
+        if field_def.validation == "enum" and field_def.allowed_values:
+            constraints["_enum_values"] = field_def.allowed_values
 
-        return field_type, constraints
+        return constraints
 
     def _create_field_validators(self, schema: EntitySchema) -> dict[str, Any]:
         """Create custom field validators for complex validation rules.
@@ -350,6 +439,28 @@ class DynamicModelFactory:
                 )
 
         return v
+
+    def _create_enum_validator(self, field_name: str, allowed_values: list[str]) -> Any:
+        """Create a field validator for enum validation.
+
+        Args:
+            field_name: Name of the field to validate
+            allowed_values: List of allowed string values
+
+        Returns:
+            Field validator function
+        """
+
+        def validate_enum(_cls: Any, v: Any) -> Any:
+            if v is not None and v not in allowed_values:
+                raise ValueError(
+                    f"Invalid value '{v}' for field '{field_name}'. "
+                    f"Must be one of: {', '.join(allowed_values)}"
+                )
+            return v
+
+        # Return validator with proper decorator
+        return field_validator(field_name)(validate_enum)
 
     def clear_cache(self) -> None:
         """Clear the model cache. Useful for testing or when schemas change."""
