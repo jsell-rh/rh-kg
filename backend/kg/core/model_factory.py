@@ -167,14 +167,27 @@ class DynamicModelFactory:
         Returns:
             Root model class that validates entire YAML files
         """
-        # Create entity container model
+        # First, create individual entity models
+        entity_models = {}
+        for entity_type, schema in schemas.items():
+            entity_models[entity_type] = self.create_entity_model(schema)
+
+        # Create entity container model with proper typing
         entity_container_fields = {}
 
-        for entity_type, _schema in schemas.items():
-            # Each entity type is an optional list of entity dictionaries
+        for entity_type, _entity_model in entity_models.items():
+            # Each entity type is an optional list of dictionaries mapping names to entity instances
             entity_container_fields[entity_type] = (
                 list[dict[str, Any]] | None,
                 None,  # Default value
+            )
+
+        # Create validators for each entity type
+        entity_validators = {}
+        for entity_type, entity_model in entity_models.items():
+            validator_name = f"validate_{entity_type}"
+            entity_validators[validator_name] = self._create_entity_list_validator(
+                entity_type, entity_model
             )
 
         # Create EntityContainer model
@@ -187,6 +200,7 @@ class DynamicModelFactory:
         EntityContainer = create_model(  # type: ignore[call-overload]
             "EntityContainer",
             __base__=EntityBaseModel,
+            __validators__=entity_validators,
             **entity_container_fields,
         )
 
@@ -461,6 +475,47 @@ class DynamicModelFactory:
 
         # Return validator with proper decorator
         return field_validator(field_name)(validate_enum)
+
+    def _create_entity_list_validator(
+        self, entity_type: str, entity_model: type[BaseModel]
+    ) -> Any:
+        """Create a validator for a list of entity dictionaries.
+
+        Args:
+            entity_type: The name of the entity type
+            entity_model: The Pydantic model class for this entity type
+
+        Returns:
+            Field validator function
+        """
+
+        def validate_entity_list(
+            v: list[dict[str, Any]] | None, _info: Any
+        ) -> list[dict[str, Any]] | None:
+            if v is None:
+                return v
+
+            validated_list = []
+            for item in v:
+                if not isinstance(item, dict):
+                    raise ValueError(f"Each item in {entity_type} must be a dictionary")
+
+                validated_item = {}
+                for entity_name, entity_data in item.items():
+                    # Validate entity_data using the entity model
+                    try:
+                        validated_entity = entity_model.model_validate(entity_data)
+                        validated_item[entity_name] = validated_entity
+                    except Exception as e:
+                        raise ValueError(
+                            f"Validation failed for {entity_type} '{entity_name}': {e}"
+                        ) from e
+
+                validated_list.append(validated_item)
+
+            return validated_list
+
+        return field_validator(entity_type)(validate_entity_list)
 
     def clear_cache(self) -> None:
         """Clear the model cache. Useful for testing or when schemas change."""

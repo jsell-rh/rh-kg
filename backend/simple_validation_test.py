@@ -8,6 +8,12 @@ manually created schemas, isolating it from schema loading issues.
 import asyncio
 from pathlib import Path
 import sys
+from typing import TYPE_CHECKING
+
+import pytest
+
+if TYPE_CHECKING:
+    pass
 
 # Add the backend directory to the Python path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -62,6 +68,7 @@ def create_test_schemas() -> dict[str, EntitySchema]:
     return {"repository": repository_schema}
 
 
+@pytest.mark.asyncio  # type: ignore[misc]
 async def test_validation_engine() -> None:
     """Test the validation engine with simple schemas."""
 
