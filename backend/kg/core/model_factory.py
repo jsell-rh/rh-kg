@@ -465,7 +465,7 @@ class DynamicModelFactory:
             Field validator function
         """
 
-        def validate_enum(_cls: Any, v: Any) -> Any:
+        def validate_enum(cls: Any, v: Any) -> Any:  # noqa: ARG001
             if v is not None and v not in allowed_values:
                 raise ValueError(
                     f"Invalid value '{v}' for field '{field_name}'. "
