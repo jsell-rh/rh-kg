@@ -2,20 +2,44 @@
 
 ## Overview
 
-This specification defines the storage interface for interacting with Dgraph, including connection management, CRUD operations, query patterns, and error handling. The interface abstracts Dgraph specifics to enable testing and potential future database migrations.
+This specification defines the storage interface for interacting with Dgraph, including connection management, CRUD operations, query patterns, and error handling. The interface abstracts Dgraph specifics using strongly-typed Pydantic models and enables testing through mock implementations.
 
-## Storage Interface Contract
+## Architecture Principles
 
-### Abstract Storage Interface
+### Strongly-Typed Interface
+
+All storage operations use **Pydantic BaseModel** return types instead of generic dictionaries, providing:
+
+- **Type Safety**: Compile-time type checking with mypy/pyright
+- **Runtime Validation**: Automatic data validation and serialization
+- **Clear Contracts**: Self-documenting API with field descriptions
+- **IDE Support**: Better autocomplete and refactoring support
+
+### Command Separation
+
+The storage interface supports two distinct CLI workflows:
+
+- **`kg validate`**: Pure schema validation (Layers 1-4), no storage dependency
+- **`kg apply`**: Full validation pipeline (Layers 1-5) + storage operations
+
+### Storage Interface Contract
 
 ```python
 from abc import ABC, abstractmethod
-from typing import Any, Optional
-from kg.core.models import Repository, ExternalDependency, KnowledgeGraphFile
+from typing import Any
+from kg.core import EntitySchema
+from kg.storage.models import (
+    HealthCheckResult, EntityData, DryRunResult,
+    SystemMetrics, QueryResult, RelationshipData
+)
 
 class StorageInterface(ABC):
-    """Abstract interface for knowledge graph storage operations."""
+    """Abstract interface for knowledge graph storage operations.
 
+    Uses strongly-typed Pydantic models for all return types.
+    """
+
+    # Connection Management
     @abstractmethod
     async def connect(self) -> None:
         """Establish connection to storage backend."""
@@ -27,10 +51,11 @@ class StorageInterface(ABC):
         pass
 
     @abstractmethod
-    async def health_check(self) -> dict[str, Any]:
-        """Check storage backend health and return status."""
+    async def health_check(self) -> HealthCheckResult:
+        """Check storage backend health and return typed status."""
         pass
 
+    # Schema Management
     @abstractmethod
     async def load_schemas(self, schema_dir: str) -> dict[str, EntitySchema]:
         """Load entity schemas from directory."""
@@ -41,7 +66,7 @@ class StorageInterface(ABC):
         """Reload schemas and update backend schema."""
         pass
 
-    # Generic entity operations
+    # Entity Operations (CRUD) - Strongly Typed
     @abstractmethod
     async def store_entity(
         self,
@@ -54,8 +79,8 @@ class StorageInterface(ABC):
         pass
 
     @abstractmethod
-    async def get_entity(self, entity_type: str, entity_id: str) -> Optional[dict[str, Any]]:
-        """Retrieve entity by type and ID. Returns None if not found."""
+    async def get_entity(self, entity_type: str, entity_id: str) -> EntityData | None:
+        """Retrieve entity by type and ID. Returns EntityData if found."""
         pass
 
     @abstractmethod
@@ -67,14 +92,20 @@ class StorageInterface(ABC):
     async def list_entities(
         self,
         entity_type: str,
-        filters: Optional[dict[str, Any]] = None,
+        filters: dict[str, Any] | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[dict[str, Any]]:
-        """List entities of given type with optional filtering."""
+    ) -> list[EntityData]:
+        """List entities with strongly-typed results."""
         pass
 
-    # Generic relationship operations
+    # Reference Validation (for Layer 5 validation)
+    @abstractmethod
+    async def entity_exists(self, entity_id: str) -> bool:
+        """Check if entity exists (for reference validation)."""
+        pass
+
+    # Relationship Operations - Strongly Typed
     @abstractmethod
     async def find_entities_with_relationship(
         self,
@@ -83,8 +114,8 @@ class StorageInterface(ABC):
         target_entity_id: str,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[dict[str, Any]]:
-        """Find entities that have a specific relationship to target entity."""
+    ) -> list[EntityData]:
+        """Find entities with specific relationship to target."""
         pass
 
     @abstractmethod
@@ -92,21 +123,167 @@ class StorageInterface(ABC):
         self,
         entity_type: str,
         entity_id: str
-    ) -> dict[str, list[dict[str, Any]]]:
-        """Get all relationships for an entity, grouped by relationship type."""
+    ) -> list[RelationshipData]:
+        """Get all relationships for an entity with typed results."""
         pass
 
-    # System operations
+    # System Operations - Strongly Typed
     @abstractmethod
-    async def get_system_metrics(self) -> dict[str, Any]:
-        """Get system-wide metrics."""
+    async def get_system_metrics(self) -> SystemMetrics:
+        """Get system-wide metrics with typed response."""
         pass
 
     @abstractmethod
-    async def execute_query(self, query: str, variables: Optional[dict[str, Any]] = None) -> dict[str, Any]:
-        """Execute raw backend query for advanced use cases."""
+    async def execute_query(
+        self,
+        query: str,
+        variables: dict[str, Any] | None = None
+    ) -> QueryResult:
+        """Execute raw backend query with typed results."""
+        pass
+
+    # Dry Run Operations (for apply --dry-run)
+    @abstractmethod
+    async def dry_run_apply(self, entities: list[dict[str, Any]]) -> DryRunResult:
+        """Simulate applying entities without making changes."""
         pass
 ```
+
+## Pydantic Models
+
+### Core Data Models
+
+All storage operations use strongly-typed Pydantic models:
+
+```python
+from pydantic import BaseModel, Field
+from enum import Enum
+from datetime import datetime
+from typing import Any
+
+class HealthStatus(str, Enum):
+    """Storage backend health status."""
+    HEALTHY = "healthy"
+    DEGRADED = "degraded"
+    ERROR = "error"
+    DISCONNECTED = "disconnected"
+
+class HealthCheckResult(BaseModel):
+    """Result of storage backend health check."""
+    status: HealthStatus
+    response_time_ms: float = Field(ge=0)
+    backend_version: str | None = None
+    additional_info: dict[str, Any] = Field(default_factory=dict)
+
+class EntityData(BaseModel):
+    """Standardized entity data structure."""
+    id: str
+    entity_type: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    relationships: dict[str, list[dict[str, Any]]] = Field(default_factory=dict)
+    system_metadata: dict[str, Any] = Field(default_factory=dict)
+
+class RelationshipData(BaseModel):
+    """Data structure for entity relationships."""
+    relationship_name: str
+    target_entities: list[EntityData]
+    relationship_metadata: dict[str, Any] = Field(default_factory=dict)
+
+class EntityCounts(BaseModel):
+    """Entity counts by type."""
+    repository: int = 0
+    external_dependency_package: int = 0
+    external_dependency_version: int = 0
+    total: int  # Automatically calculated
+
+class SystemMetrics(BaseModel):
+    """System-wide storage metrics."""
+    entity_counts: EntityCounts
+    total_relationships: int = Field(ge=0)
+    storage_size_mb: float = Field(ge=0)
+    last_updated: datetime
+    backend_specific: dict[str, Any] = Field(default_factory=dict)
+
+class DryRunResult(BaseModel):
+    """Result of dry-run apply operation."""
+    would_create: list[EntityOperation] = Field(default_factory=list)
+    would_update: list[EntityOperation] = Field(default_factory=list)
+    would_delete: list[EntityOperation] = Field(default_factory=list)
+    validation_issues: list[ValidationIssue] = Field(default_factory=list)
+    summary: dict[str, Any] = Field(default_factory=dict)
+
+    @property
+    def has_errors(self) -> bool:
+        """Check if there are any validation errors."""
+        return any(issue.severity == "error" for issue in self.validation_issues)
+
+class QueryResult(BaseModel):
+    """Result of raw query execution."""
+    success: bool
+    data: dict[str, Any] = Field(default_factory=dict)
+    execution_time_ms: float = Field(ge=0)
+    backend_specific: dict[str, Any] = Field(default_factory=dict)
+    error_message: str | None = None
+```
+
+### Benefits of Strongly-Typed Interface
+
+1. **Type Safety**: All return types are validated at runtime
+2. **Clear Documentation**: Field descriptions and constraints are built-in
+3. **IDE Support**: Better autocomplete and error detection
+4. **Serialization**: Automatic JSON/YAML serialization for APIs
+5. **Validation**: Input validation with clear error messages
+
+## Mock Storage Implementation
+
+A complete mock implementation is provided for testing:
+
+```python
+from kg.storage import MockStorage
+
+storage = MockStorage()
+await storage.connect()
+
+# Returns strongly-typed HealthCheckResult
+health = await storage.health_check()
+assert health.status == HealthStatus.HEALTHY
+assert health.response_time_ms > 0
+
+# Returns strongly-typed EntityData or None
+entity = await storage.get_entity("repository", "test/repo")
+if entity:
+    assert isinstance(entity, EntityData)
+    assert entity.entity_type == "repository"
+```
+
+## CLI Integration
+
+### Validation Command (No Storage)
+
+```bash
+kg validate knowledge-graph.yaml  # Layers 1-4 only, no storage calls
+```
+
+The `validate` command is **purely local** and **never touches storage**, ensuring:
+
+- Fast validation in CI/CD pipelines
+- No external dependencies
+- Safe to run anywhere
+- Consistent behavior
+
+### Apply Command (With Storage)
+
+```bash
+kg apply knowledge-graph.yaml                    # Apply to local storage
+kg apply --server=https://kg.company.com graph.yaml  # Apply to remote server
+kg apply --dry-run graph.yaml                    # Preview changes only
+```
+
+The `apply` command performs **full validation pipeline** (Layers 1-5) + storage operations:
+
+- Reference validation (Layer 5) queries storage
+- Dry-run shows exactly what would change
+- Atomic operations with rollback on failure
 
 ## Dgraph Implementation
 

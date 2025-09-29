@@ -1,0 +1,131 @@
+# Knowledge Graph Docker Compose - Development Configuration
+#
+# This provides a complete development environment with:
+# - Dgraph Zero (coordination)
+# - Dgraph Alpha (data storage)
+# - Knowledge Graph Backend (our FastAPI service)
+# - Hot reload for development
+# - Persistent data volumes
+
+services:
+  # Dgraph Zero - Cluster coordination service
+  dgraph-zero:
+    image: dgraph/dgraph:v23.1.0
+    container_name: kg-dgraph-zero
+    restart: unless-stopped
+    command: dgraph zero --my=dgraph-zero:5080
+    ports:
+      - "5080:5080" # Zero gRPC
+      - "6080:6080" # Zero HTTP
+    volumes:
+      - dgraph-zero-data:/dgraph
+    networks:
+      - kg-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6080/state"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Dgraph Alpha - Data storage and query service
+  dgraph-alpha:
+    image: dgraph/dgraph:v23.1.0
+    container_name: kg-dgraph-alpha
+    restart: unless-stopped
+    command: dgraph alpha --my=dgraph-alpha:7080 --zero=dgraph-zero:5080 --security whitelist=0.0.0.0/0
+    ports:
+      - "8080:8080" # HTTP
+      - "9080:9080" # gRPC
+    volumes:
+      - dgraph-alpha-data:/dgraph
+    networks:
+      - kg-network
+    depends_on:
+      dgraph-zero:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    environment:
+      - DGRAPH_ALPHA_SECURITY=whitelist=0.0.0.0/0
+
+  # Knowledge Graph Backend Service
+  kg-backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: development
+    container_name: kg-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000" # FastAPI server
+    volumes:
+      # Hot reload for development
+      - ./backend/kg:/app/kg:ro
+      - ./spec:/app/spec:ro
+      # Development dependencies
+      - ./backend/pyproject.toml:/app/pyproject.toml:ro
+      - ./backend/uv.lock:/app/uv.lock:ro
+    networks:
+      - kg-network
+    depends_on:
+      dgraph-alpha:
+        condition: service_healthy
+    environment:
+      # Storage configuration
+      - STORAGE_BACKEND_TYPE=dgraph
+      - STORAGE_ENDPOINT=dgraph-alpha:9080
+      - STORAGE_TIMEOUT_SECONDS=30
+      - STORAGE_USE_TLS=false
+
+      # Development settings
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+      - RELOAD=true
+
+      # Schema configuration
+      - SCHEMA_DIR=/app/spec/schemas
+
+      # FastAPI settings
+      - HOST=0.0.0.0
+      - PORT=8000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Future: Frontend service placeholder
+  # kg-frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #   container_name: kg-frontend
+  #   ports:
+  #     - "3000:3000"
+  #   networks:
+  #     - kg-network
+  #   depends_on:
+  #     - kg-backend
+  #   environment:
+  #     - NUXT_APP_API_URL=http://localhost:8000
+
+# Persistent volumes for data
+volumes:
+  dgraph-zero-data:
+    driver: local
+    name: kg-dgraph-zero-data
+  dgraph-alpha-data:
+    driver: local
+    name: kg-dgraph-alpha-data
+
+# Network for service communication
+networks:
+  kg-network:
+    driver: bridge
+    name: kg-network

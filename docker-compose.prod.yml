@@ -1,0 +1,183 @@
+# Production Docker Compose Override
+#
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Production optimizations:
+# - Multiple Dgraph Alpha replicas for HA
+# - Optimized resource limits
+# - Production-grade security
+# - No development volumes
+# - Clustering and load balancing
+
+services:
+  # Production Dgraph Zero with resource limits
+  dgraph-zero:
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+        reservations:
+          memory: 256M
+          cpus: "0.25"
+    command: dgraph zero --my=dgraph-zero:5080 --replicas=3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Primary Dgraph Alpha
+  dgraph-alpha:
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "1.0"
+        reservations:
+          memory: 1G
+          cpus: "0.5"
+    command: dgraph alpha --my=dgraph-alpha:7080 --zero=dgraph-zero:5080 --security whitelist=kg-backend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # Remove port exposure for security (only internal access)
+    ports: []
+    environment:
+      - DGRAPH_ALPHA_SECURITY=whitelist=kg-backend
+
+  # Additional Dgraph Alpha replicas for high availability
+  dgraph-alpha-2:
+    image: dgraph/dgraph:v23.1.0
+    container_name: kg-dgraph-alpha-2
+    restart: unless-stopped
+    command: dgraph alpha --my=dgraph-alpha-2:7080 --zero=dgraph-zero:5080 --security whitelist=kg-backend
+    volumes:
+      - dgraph-alpha-2-data:/dgraph
+    networks:
+      - kg-network
+    depends_on:
+      - dgraph-zero
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "1.0"
+        reservations:
+          memory: 1G
+          cpus: "0.5"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      - DGRAPH_ALPHA_SECURITY=whitelist=kg-backend
+
+  dgraph-alpha-3:
+    image: dgraph/dgraph:v23.1.0
+    container_name: kg-dgraph-alpha-3
+    restart: unless-stopped
+    command: dgraph alpha --my=dgraph-alpha-3:7080 --zero=dgraph-zero:5080 --security whitelist=kg-backend
+    volumes:
+      - dgraph-alpha-3-data:/dgraph
+    networks:
+      - kg-network
+    depends_on:
+      - dgraph-zero
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "1.0"
+        reservations:
+          memory: 1G
+          cpus: "0.5"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      - DGRAPH_ALPHA_SECURITY=whitelist=kg-backend
+
+  # Production Knowledge Graph Backend
+  kg-backend:
+    build:
+      target: production
+    # Remove development volumes
+    volumes:
+      - ./spec:/app/spec:ro # Only spec files, no hot reload
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+        reservations:
+          memory: 512M
+          cpus: "0.5"
+    environment:
+      # Production storage configuration
+      - STORAGE_BACKEND_TYPE=dgraph
+      - STORAGE_ENDPOINT=dgraph-alpha:9080,dgraph-alpha-2:9080,dgraph-alpha-3:9080
+      - STORAGE_TIMEOUT_SECONDS=60
+      - STORAGE_USE_TLS=false
+      - STORAGE_MAX_RETRIES=5
+
+      # Production settings
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+      - RELOAD=false
+
+      # Security settings
+      - CORS_ORIGINS=https://kg.company.com
+      - ALLOWED_HOSTS=kg.company.com,localhost
+
+      # Performance settings
+      - WORKER_COUNT=4
+      - MAX_CONNECTIONS=100
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Production Load Balancer (nginx)
+  kg-loadbalancer:
+    image: nginx:alpine
+    container_name: kg-loadbalancer
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    networks:
+      - kg-network
+    depends_on:
+      - kg-backend
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.25"
+        reservations:
+          memory: 64M
+          cpus: "0.1"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Additional volumes for HA setup
+volumes:
+  dgraph-alpha-2-data:
+    driver: local
+    name: kg-dgraph-alpha-2-data
+  dgraph-alpha-3-data:
+    driver: local
+    name: kg-dgraph-alpha-3-data

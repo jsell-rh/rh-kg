@@ -1,5 +1,13 @@
 """Core functionality for the knowledge graph."""
 
+from .logging import (
+    StorageOperationLogger,
+    StructlogMiddleware,
+    bind_context,
+    clear_context,
+    configure_logging,
+    get_logger,
+)
 from .model_factory import DynamicModelFactory
 from .schema import (
     EntitySchema,
@@ -12,8 +20,16 @@ from .schema import (
 )
 from .schema_loader import FileSchemaLoader, SchemaLoader
 
-# Export all schema-related components
+# Export all components
 __all__ = [
+    # Logging
+    "configure_logging",
+    "get_logger",
+    "bind_context",
+    "clear_context",
+    "StorageOperationLogger",
+    "StructlogMiddleware",
+    # Schema and model components
     "DynamicModelFactory",
     "EntitySchema",
     "FieldDefinition",

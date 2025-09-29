@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "kg"
 version = "0.1.0"
 description = "Red Hat Knowledge Graph - Modern Python infrastructure for knowledge management"
-readme = "../README.md"
+readme = "README.md"
 license = {text = "MIT"}
 authors = [
     {name = "John Sell", email = "jsell@redhat.com"}
@@ -28,11 +28,15 @@ classifiers = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "pydantic[email]>=2.8.0",
-    "fastapi>=0.111.0",
-    "rich-click>=1.8.0",
-    "pyyaml>=6.0.1",
-    "pytest>=8.3.0",
+    "pydantic[email]==2.11.9",
+    "pydantic-settings==2.11.0",
+    "fastapi==0.118.0",
+    "uvicorn[standard]==0.37.0",
+    "rich-click==1.9.1",
+    "pyyaml==6.0.3",
+    "pytest==8.4.2",
+    "pydgraph==24.3.0",
+    "structlog==25.4.0",
 ]
 
 [project.optional-dependencies]
