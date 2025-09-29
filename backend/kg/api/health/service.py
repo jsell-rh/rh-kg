@@ -9,6 +9,9 @@ from typing import Any
 
 from ...storage import HealthCheckResult, StorageInterface, SystemMetrics
 
+# Global application start time
+_app_start_time: float = time.time()
+
 
 class HealthService:
     """Service class for health check operations."""
@@ -47,6 +50,10 @@ class HealthService:
 
         response_time = (time.time() - start_time) * 1000
 
+        # Calculate actual uptime since application start
+        current_time = time.time()
+        uptime_seconds = current_time - _app_start_time
+
         return {
             "api": {
                 "name": "Knowledge Graph API",
@@ -73,7 +80,10 @@ class HealthService:
                 "last_updated": metrics.last_updated.isoformat(),
             },
             "environment": {
-                "timestamp": time.time(),
-                "uptime_seconds": response_time / 1000,  # Mock uptime
+                "timestamp": current_time,
+                "uptime_seconds": round(uptime_seconds, 2),
+                "started_at": time.strftime(
+                    "%Y-%m-%dT%H:%M:%S", time.gmtime(_app_start_time)
+                ),
             },
         }

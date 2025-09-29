@@ -599,13 +599,22 @@ class DgraphStorage(StorageInterface):
             # Build Dgraph schema from entity schemas
             schema_parts = []
 
-            # Add base types
-            schema_parts.append("entity_id: string @index(exact) .")
-            schema_parts.append("entity_type: string @index(exact) .")
-            schema_parts.append("created_at: datetime .")
-            schema_parts.append("updated_at: datetime .")
+            # Collect all unique predicates across all schemas
+            all_predicates: dict[
+                str, tuple[str, str | None]
+            ] = {}  # field_name -> (dgraph_type, index_type)
 
-            # Add entity-specific schema
+            # Add base predicates
+            all_predicates["entity_id"] = ("string", "exact")
+            all_predicates["entity_type"] = ("string", "exact")
+            all_predicates["created_at"] = ("datetime", None)
+            all_predicates["updated_at"] = ("datetime", None)
+
+            # Collect all entity fields, avoiding duplicates
+            entity_field_sets: dict[
+                str, set[str]
+            ] = {}  # entity_type -> set of field names
+
             for entity_type, schema in self._schemas.items():
                 # Collect all fields from schema
                 all_fields: list[FieldDefinition] = []
@@ -613,37 +622,63 @@ class DgraphStorage(StorageInterface):
                 all_fields.extend(schema.optional_fields)
                 all_fields.extend(schema.readonly_fields)
 
-                # Add fields from schema
+                # Track fields for this entity type
+                entity_field_sets[entity_type] = set()
+
+                # Add fields to global predicate registry
                 for field_def in all_fields:
                     field_name = field_def.name
-                    # Convert schema field types to Dgraph types
-                    dgraph_type = self._convert_field_type(field_def.type)
-                    index_type = self._get_index_type(field_def)
+                    entity_field_sets[entity_type].add(field_name)
 
-                    if index_type:
-                        schema_parts.append(
-                            f"{field_name}: {dgraph_type} @index({index_type}) ."
-                        )
-                    else:
-                        schema_parts.append(f"{field_name}: {dgraph_type} .")
+                    # Only add if not already defined (first definition wins)
+                    if field_name not in all_predicates:
+                        dgraph_type = self._convert_field_type(field_def.type)
+                        index_type = self._get_index_type(field_def)
+                        all_predicates[field_name] = (dgraph_type, index_type)
 
-                # Add type definition
+            # Define all predicates once
+            for field_name, (dgraph_type, index_type) in all_predicates.items():
+                if index_type:
+                    schema_parts.append(
+                        f"{field_name}: {dgraph_type} @index({index_type}) ."
+                    )
+                else:
+                    schema_parts.append(f"{field_name}: {dgraph_type} .")
+
+            # Define entity types
+            for entity_type in self._schemas:
                 schema_parts.append(f"type {entity_type} {{")
                 schema_parts.append("  entity_id")
                 schema_parts.append("  entity_type")
-                for field_def in all_fields:
-                    schema_parts.append(f"  {field_def.name}")
+
+                # Add all fields for this entity type
+                for field_name in entity_field_sets[entity_type]:
+                    schema_parts.append(f"  {field_name}")
                 schema_parts.append("}")
 
             # Apply schema
             schema_str = "\n".join(schema_parts)
+
+            logger.debug(
+                "Generated Dgraph schema",
+                predicate_count=len(all_predicates),
+                entity_types=list(self._schemas.keys()),
+                schema_preview=schema_str[:200] + "..."
+                if len(schema_str) > 200
+                else schema_str,
+            )
+
             operation = pydgraph.Operation(schema=schema_str)
             self._client.alter(operation)
 
-            logger.info("Dgraph schema initialized successfully")
+            logger.info(
+                "Dgraph schema initialized successfully",
+                predicates_defined=len(all_predicates),
+                entity_types_defined=len(self._schemas),
+            )
 
         except Exception as e:
-            logger.error(f"Failed to initialize Dgraph schema: {e}")
+            logger.error("Failed to initialize Dgraph schema", error=str(e))
             raise StorageOperationError(f"Schema initialization failed: {e}") from e
 
     def _convert_field_type(self, field_type: str) -> str:

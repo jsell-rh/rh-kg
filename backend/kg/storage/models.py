@@ -74,12 +74,14 @@ class EntityCounts(BaseModel):
 
     def __init__(self, **data: Any):
         """Calculate total automatically."""
+        # Calculate total before calling super if not provided
+        if "total" not in data:
+            data["total"] = (
+                data.get("repository", 0)
+                + data.get("external_dependency_package", 0)
+                + data.get("external_dependency_version", 0)
+            )
         super().__init__(**data)
-        self.total = (
-            self.repository
-            + self.external_dependency_package
-            + self.external_dependency_version
-        )
 
 
 class SystemMetrics(BaseModel):
