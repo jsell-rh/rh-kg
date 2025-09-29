@@ -243,20 +243,25 @@ class DgraphStorage(StorageInterface):
 
         try:
             # Prepare mutation data
+            # Don't set UID for new entities - let Dgraph auto-assign
+            # Flatten system_metadata to avoid nested object issues
             mutation_data = {
-                "uid": f"_:{entity_id}",
                 "dgraph.type": entity_type,
                 "entity_id": entity_id,
                 "entity_type": entity_type,
                 **entity_data,
-                "system_metadata": metadata,
                 "created_at": datetime.now().isoformat(),
             }
+
+            # Add metadata fields with prefixes to avoid conflicts
+            for key, value in metadata.items():
+                mutation_data[f"sys_{key}"] = value
 
             # Create mutation
             txn = self._client.txn()
             try:
-                mutation = pydgraph.Mutation(set_json=json.dumps(mutation_data))
+                json_data = json.dumps(mutation_data).encode("utf-8")
+                mutation = pydgraph.Mutation(set_json=json_data)
                 txn.mutate(mutation)
                 txn.commit()
 
@@ -280,8 +285,6 @@ class DgraphStorage(StorageInterface):
             {{
                 entity(func: eq(entity_id, "{entity_id}")) @filter(eq(dgraph.type, "{entity_type}")) {{
                     uid
-                    entity_id
-                    entity_type
                     expand(_all_)
                 }}
             }}
@@ -390,8 +393,6 @@ class DgraphStorage(StorageInterface):
             {{
                 entities(func: eq(dgraph.type, "{entity_type}"), first: {limit}, offset: {offset}) {filter_clause} {{
                     uid
-                    entity_id
-                    entity_type
                     expand(_all_)
                 }}
             }}
