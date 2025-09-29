@@ -48,7 +48,7 @@ class APIConfig(BaseSettings):
 
     # Storage configuration fields (flattened)
     storage_backend_type: str = Field(default="dgraph", alias="STORAGE_BACKEND_TYPE")
-    storage_endpoint: str = Field(default="dgraph-alpha:9080", alias="STORAGE_ENDPOINT")
+    storage_endpoint: str = Field(default="localhost:9080", alias="STORAGE_ENDPOINT")
     storage_timeout_seconds: int = Field(default=30, alias="STORAGE_TIMEOUT_SECONDS")
     storage_max_retries: int = Field(default=3, alias="STORAGE_MAX_RETRIES")
     storage_use_tls: bool = Field(default=False, alias="STORAGE_USE_TLS")
