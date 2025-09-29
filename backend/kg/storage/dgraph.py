@@ -237,27 +237,72 @@ class DgraphStorage(StorageInterface):
         entity_data: dict[str, Any],
         metadata: dict[str, Any],
     ) -> str:
-        """Store entity in Dgraph."""
+        """Store entity in Dgraph with proper upsert behavior."""
         if not self._connected or not self._client:
             raise StorageConnectionError("Not connected to Dgraph")
 
         try:
+            # Check if entity already exists
+            existing_entity = await self.get_entity(entity_type, entity_id)
+
             # Prepare mutation data
-            # Don't set UID for new entities - let Dgraph auto-assign
-            # Flatten system_metadata to avoid nested object issues
             mutation_data = {
                 "dgraph.type": entity_type,
                 "entity_id": entity_id,
                 "entity_type": entity_type,
                 **entity_data,
-                "created_at": datetime.now().isoformat(),
+                "updated_at": datetime.now().isoformat(),
             }
+
+            if existing_entity:
+                # Update existing entity - find the UID
+                query = f"""
+                {{
+                    entity(func: eq(entity_id, "{entity_id}")) @filter(eq(dgraph.type, "{entity_type}")) {{
+                        uid
+                        created_at
+                    }}
+                }}
+                """
+
+                result = await self._execute_query(query)
+                if result.success and result.data.get("entity"):
+                    # Use the first found entity's UID (handle duplicates by updating first one)
+                    entity_info = result.data["entity"][0]
+                    uid = entity_info["uid"]
+                    mutation_data["uid"] = uid
+
+                    # Preserve original created_at timestamp
+                    original_created_at = entity_info.get("created_at")
+                    if original_created_at:
+                        mutation_data["created_at"] = original_created_at
+
+                    logger.debug(
+                        f"Updating existing entity {entity_type}/{entity_id} with UID {uid}"
+                    )
+                else:
+                    raise StorageOperationError(
+                        f"Failed to find UID for existing entity {entity_id}"
+                    )
+            else:
+                # New entity - set created_at
+                mutation_data["created_at"] = datetime.now().isoformat()
+                logger.debug(f"Creating new entity {entity_type}/{entity_id}")
 
             # Add metadata fields with prefixes to avoid conflicts
             for key, value in metadata.items():
                 mutation_data[f"sys_{key}"] = value
 
-            # Create mutation
+            # Process dependencies if present (external dependencies)
+            depends_on = entity_data.get("depends_on", [])
+            if depends_on:
+                # Remove depends_on from entity data - we'll handle it separately
+                mutation_data.pop("depends_on", None)
+                logger.debug(
+                    f"Processing {len(depends_on)} dependencies for {entity_id}"
+                )
+
+            # Create/update mutation
             txn = self._client.txn()
             try:
                 json_data = json.dumps(mutation_data).encode("utf-8")
@@ -265,7 +310,15 @@ class DgraphStorage(StorageInterface):
                 txn.mutate(mutation)
                 txn.commit()
 
-                logger.debug(f"Stored entity {entity_type}/{entity_id}")
+                action = "Updated" if existing_entity else "Created"
+                logger.info(f"{action} entity {entity_type}/{entity_id}")
+
+                # TODO: Process dependencies after entity creation/update
+                if depends_on:
+                    logger.warning(
+                        f"Dependency processing not yet implemented for {len(depends_on)} dependencies"
+                    )
+
                 return entity_id
 
             finally:
