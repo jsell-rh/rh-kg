@@ -2,6 +2,7 @@
 
 import rich_click as click
 
+from .apply import apply_command
 from .validate import validate_command
 
 # Configure rich-click styling
@@ -26,7 +27,8 @@ def main() -> None:
     pass
 
 
-# Add the validate command to the group
+# Add commands to the group
+main.add_command(apply_command)
 main.add_command(validate_command)
 
 

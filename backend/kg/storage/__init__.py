@@ -15,12 +15,14 @@ from .mock import MockStorage
 from .models import (
     DryRunResult,
     EntityData,
+    EntityOperation,
     HealthCheckResult,
     HealthStatus,
     QueryResult,
     RelationshipData,
     StorageConfig,
     SystemMetrics,
+    ValidationIssue,
 )
 
 __all__ = [
@@ -36,12 +38,14 @@ __all__ = [
     # Models
     "DryRunResult",
     "EntityData",
+    "EntityOperation",
     "HealthCheckResult",
     "HealthStatus",
     "QueryResult",
     "RelationshipData",
     "StorageConfig",
     "SystemMetrics",
+    "ValidationIssue",
     # Exceptions
     "StorageError",
     "StorageConfigurationError",

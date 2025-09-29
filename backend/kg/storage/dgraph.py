@@ -24,12 +24,14 @@ from .models import (
     DryRunResult,
     EntityCounts,
     EntityData,
+    EntityOperation,
     HealthCheckResult,
     HealthStatus,
     QueryResult,
     RelationshipData,
     StorageConfig,
     SystemMetrics,
+    ValidationIssue,
 )
 
 logger = get_logger(__name__)
@@ -536,10 +538,169 @@ class DgraphStorage(StorageInterface):
         """Execute raw Dgraph query."""
         return await self._execute_query(query, variables)
 
-    async def dry_run_apply(self, entities: list[dict[str, Any]]) -> DryRunResult:
-        """Simulate entity application without changes."""
-        # TODO: Implement dry-run simulation
-        return DryRunResult(summary={"simulated": True, "entity_count": len(entities)})
+    async def dry_run_apply(  # noqa: PLR0912
+        self, entities: list[dict[str, Any]]
+    ) -> DryRunResult:
+        """Simulate entity application without changes.
+
+        Analyzes what operations would be performed during apply:
+        - Determines which entities would be created vs updated
+        - Validates references and relationships
+        - Identifies potential issues
+        - Returns detailed operation plan
+        """
+        if not self._connected or not self._client:
+            raise StorageConnectionError("Not connected to Dgraph")
+
+        would_create: list[EntityOperation] = []
+        would_update: list[EntityOperation] = []
+        would_delete: list[EntityOperation] = []
+        validation_issues: list[ValidationIssue] = []
+
+        try:
+            for entity_data in entities:
+                entity_type = entity_data.get("entity_type")
+                entity_id = entity_data.get("entity_id")
+                metadata = entity_data.get("metadata", {})
+
+                if not entity_type or not entity_id:
+                    validation_issues.append(
+                        ValidationIssue(
+                            severity="error",
+                            message=f"Entity missing required fields: entity_type={entity_type}, entity_id={entity_id}",
+                            suggestion="Ensure all entities have entity_type and entity_id fields",
+                        )
+                    )
+                    continue
+
+                # Check if entity already exists
+                try:
+                    existing_entity = await self.get_entity(entity_type, entity_id)
+
+                    if existing_entity:
+                        # Entity exists - would be updated
+                        changes = {}
+
+                        # Compare metadata to find changes
+                        for key, new_value in metadata.items():
+                            existing_value = existing_entity.metadata.get(key)
+                            if existing_value != new_value:
+                                changes[key] = new_value
+
+                        if changes:
+                            would_update.append(
+                                EntityOperation(
+                                    entity_type=entity_type,
+                                    entity_id=entity_id,
+                                    operation_type="update",
+                                    changes=changes,
+                                )
+                            )
+                        else:
+                            # No changes needed
+                            validation_issues.append(
+                                ValidationIssue(
+                                    severity="warning",
+                                    entity_type=entity_type,
+                                    entity_id=entity_id,
+                                    message="Entity already exists with identical data",
+                                    suggestion="Consider removing this entity from the YAML file",
+                                )
+                            )
+                    else:
+                        # Entity doesn't exist - would be created
+                        would_create.append(
+                            EntityOperation(
+                                entity_type=entity_type,
+                                entity_id=entity_id,
+                                operation_type="create",
+                                changes=metadata,
+                            )
+                        )
+
+                except Exception as e:
+                    validation_issues.append(
+                        ValidationIssue(
+                            severity="error",
+                            entity_type=entity_type,
+                            entity_id=entity_id,
+                            message=f"Failed to check entity existence: {e}",
+                            suggestion="Verify storage connectivity and entity format",
+                        )
+                    )
+
+                # Validate dependencies/references in metadata
+                depends_on = metadata.get("depends_on", [])
+                if isinstance(depends_on, list):
+                    for dependency in depends_on:
+                        if isinstance(dependency, str) and dependency.startswith(
+                            "internal://"
+                        ):
+                            try:
+                                # Extract entity ID from internal reference
+                                # Format: internal://namespace/entity-id
+                                ref_parts = dependency.replace("internal://", "").split(
+                                    "/"
+                                )
+                                if len(ref_parts) >= 2:
+                                    ref_entity_id = "/".join(ref_parts)
+                                    ref_exists = await self.entity_exists(ref_entity_id)
+
+                                    if not ref_exists:
+                                        validation_issues.append(
+                                            ValidationIssue(
+                                                severity="error",
+                                                entity_type=entity_type,
+                                                entity_id=entity_id,
+                                                message=f"Referenced entity not found: {dependency}",
+                                                suggestion="Create the referenced entity first or remove the reference",
+                                            )
+                                        )
+                            except Exception as e:
+                                validation_issues.append(
+                                    ValidationIssue(
+                                        severity="warning",
+                                        entity_type=entity_type,
+                                        entity_id=entity_id,
+                                        message=f"Could not validate reference {dependency}: {e}",
+                                        suggestion="Verify reference format and storage connectivity",
+                                    )
+                                )
+
+            # Calculate summary
+            summary = {
+                "total_operations": len(would_create)
+                + len(would_update)
+                + len(would_delete),
+                "create_count": len(would_create),
+                "update_count": len(would_update),
+                "delete_count": len(would_delete),
+                "validation_error_count": len(
+                    [issue for issue in validation_issues if issue.severity == "error"]
+                ),
+                "validation_warning_count": len(
+                    [
+                        issue
+                        for issue in validation_issues
+                        if issue.severity == "warning"
+                    ]
+                ),
+                "has_errors": any(
+                    issue.severity == "error" for issue in validation_issues
+                ),
+            }
+
+            return DryRunResult(
+                would_create=would_create,
+                would_update=would_update,
+                would_delete=would_delete,
+                validation_issues=validation_issues,
+                summary=summary,
+            )
+
+        except Exception as e:
+            logger.error(f"Dry-run simulation failed: {e}")
+            raise StorageOperationError(f"Dry-run simulation failed: {e}") from e
 
     # Private methods
 

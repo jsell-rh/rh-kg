@@ -1,0 +1,7 @@
+schema_version: "1.0.0"
+namespace: "test-namespace"
+entity:
+  repository:
+    - test-repo:
+        owners: ["test@example.com"]
+        git_repo_url: "https://github.com/test/repo"
