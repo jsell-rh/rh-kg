@@ -156,6 +156,19 @@ class FileSchemaLoader(SchemaLoader):
             if len(all_field_names) != len(set(all_field_names)):
                 errors.append(f"Entity '{entity_type}' has duplicate field names")
 
+            # Validate no conflicts between field names and relationship names
+            relationship_names = {rel.name for rel in schema.relationships}
+            field_names_set = set(all_field_names)
+
+            name_conflicts = relationship_names.intersection(field_names_set)
+            if name_conflicts:
+                for conflict_name in name_conflicts:
+                    errors.append(
+                        f"Entity '{entity_type}' has naming conflict: "
+                        f"'{conflict_name}' is defined as both a field and a relationship. "
+                        f"Relationships and fields must have unique names within an entity schema."
+                    )
+
             # Validate dgraph_type is set
             if not schema.dgraph_type:
                 errors.append(f"Entity '{entity_type}' missing dgraph_type")
@@ -319,10 +332,6 @@ class FileSchemaLoader(SchemaLoader):
                 schema_data.get("relationships", {})
             )
 
-            # Convert relationships to optional fields for validation purposes
-            relationship_fields = self._convert_relationships_to_fields(relationships)
-            optional_fields.extend(relationship_fields)
-
             return EntitySchema(
                 entity_type=schema_data["entity_type"],
                 schema_version=schema_data["schema_version"],
@@ -402,32 +411,6 @@ class FileSchemaLoader(SchemaLoader):
             relationships.append(rel_def)
 
         return relationships
-
-    def _convert_relationships_to_fields(
-        self, relationships: list[RelationshipDefinition]
-    ) -> list[FieldDefinition]:
-        """Convert relationships to optional fields for validation purposes.
-
-        Args:
-            relationships: List of relationship definitions
-
-        Returns:
-            List of FieldDefinition objects for relationships
-        """
-        fields = []
-
-        for relationship in relationships:
-            # Create field definition for the relationship
-            field_def = FieldDefinition(
-                name=relationship.name,
-                type="array",
-                items="string",
-                required=False,
-                description=relationship.description,
-            )
-            fields.append(field_def)
-
-        return fields
 
     def get_load_result(self) -> SchemaLoadResult | None:
         """Get detailed result of last schema load operation.

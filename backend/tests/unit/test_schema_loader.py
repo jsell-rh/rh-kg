@@ -509,7 +509,7 @@ async def test_real_schema_files():
 
     # Get path to actual schema files
     current_dir = Path(__file__).parent
-    schema_dir = current_dir.parent.parent.parent / "spec" / "schemas"
+    schema_dir = current_dir.parent.parent / "schemas"
 
     if not schema_dir.exists():
         pytest.skip("Real schema files not found")

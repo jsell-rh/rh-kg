@@ -280,6 +280,29 @@ class MockStorage(StorageInterface):
 
         return relationships
 
+    async def create_relationship(
+        self,
+        source_entity_type: str,
+        source_entity_id: str,
+        relationship_type: str,
+        target_entity_type: str,  # noqa: ARG002
+        target_entity_id: str,
+    ) -> bool:
+        """Create a relationship between entities in mock storage."""
+        # For mock storage, we'll just track this as metadata in the source entity
+        source_entity = self.entities.get(source_entity_type, {}).get(source_entity_id)
+        if not source_entity:
+            return False
+
+        metadata = source_entity.get("metadata", {})
+        if relationship_type not in metadata:
+            metadata[relationship_type] = []
+
+        if target_entity_id not in metadata[relationship_type]:
+            metadata[relationship_type].append(target_entity_id)
+
+        return True
+
     # System Operations
 
     async def get_system_metrics(self) -> SystemMetrics:

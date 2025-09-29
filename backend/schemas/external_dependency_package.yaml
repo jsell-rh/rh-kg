@@ -51,11 +51,6 @@ dgraph_predicates:
     index: [exact]
     description: "Package name"
 
-  has_version:
-    type: "[uid]"
-    reverse: true
-    description: "Package versions"
-
 # Auto-creation rules
 auto_creation:
   enabled: true

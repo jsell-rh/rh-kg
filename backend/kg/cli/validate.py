@@ -465,7 +465,7 @@ def _validate_implementation(  # noqa: PLR0912, PLR0915
         try:
             # Get schema directory relative to this file's location
             backend_dir = Path(__file__).parent.parent.parent
-            schema_dir = backend_dir.parent / "spec" / "schemas"
+            schema_dir = backend_dir / "schemas"
 
             if not schema_dir.exists():
                 raise FileNotFoundError(f"Schema directory not found: {schema_dir}")

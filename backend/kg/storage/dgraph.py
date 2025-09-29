@@ -230,7 +230,7 @@ class DgraphStorage(StorageInterface):
         # TODO: Store schema_dir in instance variable during load_schemas
         raise NotImplementedError("Schema reload not yet implemented")
 
-    async def store_entity(
+    async def store_entity(  # noqa: PLR0912
         self,
         entity_type: str,
         entity_id: str,
@@ -248,7 +248,7 @@ class DgraphStorage(StorageInterface):
             # Prepare mutation data
             mutation_data = {
                 "dgraph.type": entity_type,
-                "entity_id": entity_id,
+                "id": entity_id,  # Use 'id' field as per schema definition
                 "entity_type": entity_type,
                 **entity_data,
                 "updated_at": datetime.now().isoformat(),
@@ -258,7 +258,7 @@ class DgraphStorage(StorageInterface):
                 # Update existing entity - find the UID
                 query = f"""
                 {{
-                    entity(func: eq(entity_id, "{entity_id}")) @filter(eq(dgraph.type, "{entity_type}")) {{
+                    entity(func: eq(id, "{entity_id}")) @filter(eq(dgraph.type, "{entity_type}")) {{
                         uid
                         created_at
                     }}
@@ -313,11 +313,24 @@ class DgraphStorage(StorageInterface):
                 action = "Updated" if existing_entity else "Created"
                 logger.info(f"{action} entity {entity_type}/{entity_id}")
 
-                # TODO: Process dependencies after entity creation/update
+                # Process dependencies after entity creation/update
                 if depends_on:
-                    logger.warning(
-                        f"Dependency processing not yet implemented for {len(depends_on)} dependencies"
+                    from .dependency_processor import DependencyProcessor
+
+                    dependency_processor = DependencyProcessor(self)
+
+                    success = await dependency_processor.process_dependencies(
+                        entity_id, depends_on
                     )
+
+                    if success:
+                        logger.info(
+                            f"Successfully processed {len(depends_on)} dependencies for {entity_id}"
+                        )
+                    else:
+                        logger.warning(
+                            f"Some dependencies failed to process for {entity_id}"
+                        )
 
                 return entity_id
 
@@ -336,7 +349,7 @@ class DgraphStorage(StorageInterface):
         try:
             query = f"""
             {{
-                entity(func: eq(entity_id, "{entity_id}")) @filter(eq(dgraph.type, "{entity_type}")) {{
+                entity(func: eq(id, "{entity_id}")) @filter(eq(dgraph.type, "{entity_type}")) {{
                     uid
                     expand(_all_)
                 }}
@@ -354,7 +367,7 @@ class DgraphStorage(StorageInterface):
 
             # Convert to EntityData model
             return EntityData(
-                id=entity_data["entity_id"],
+                id=entity_data["id"],
                 entity_type=entity_data["entity_type"],
                 metadata={
                     k: v
@@ -362,7 +375,7 @@ class DgraphStorage(StorageInterface):
                     if k
                     not in [
                         "uid",
-                        "entity_id",
+                        "id",
                         "entity_type",
                         "dgraph.type",
                         "system_metadata",
@@ -392,7 +405,7 @@ class DgraphStorage(StorageInterface):
             # Delete entity
             query = f"""
             {{
-                entity(func: eq(entity_id, "{entity_id}")) @filter(eq(dgraph.type, "{entity_type}")) {{
+                entity(func: eq(id, "{entity_id}")) @filter(eq(dgraph.type, "{entity_type}")) {{
                     uid
                 }}
             }}
@@ -460,7 +473,7 @@ class DgraphStorage(StorageInterface):
             for entity_data in result.data.get("entities", []):
                 entities.append(
                     EntityData(
-                        id=entity_data["entity_id"],
+                        id=entity_data["id"],
                         entity_type=entity_data["entity_type"],
                         metadata={
                             k: v
@@ -468,7 +481,7 @@ class DgraphStorage(StorageInterface):
                             if k
                             not in [
                                 "uid",
-                                "entity_id",
+                                "id",
                                 "entity_type",
                                 "dgraph.type",
                                 "system_metadata",
@@ -493,7 +506,7 @@ class DgraphStorage(StorageInterface):
         try:
             query = f"""
             {{
-                entity(func: eq(entity_id, "{entity_id}")) {{
+                entity(func: eq(id, "{entity_id}")) {{
                     count(uid)
                 }}
             }}
@@ -512,6 +525,79 @@ class DgraphStorage(StorageInterface):
         except Exception as e:
             logger.error(f"Failed to check entity existence {entity_id}: {e}")
             raise StorageQueryError(f"Entity existence check failed: {e}") from e
+
+    async def create_relationship(
+        self,
+        source_entity_type: str,
+        source_entity_id: str,
+        relationship_type: str,
+        target_entity_type: str,
+        target_entity_id: str,
+    ) -> bool:
+        """Create a relationship between two entities in Dgraph."""
+        if not self._connected or not self._client:
+            raise StorageConnectionError("Not connected to Dgraph")
+
+        try:
+            # First, find the UIDs for both entities
+            # NOTE: Using 'id' field as per schema definition, not 'entity_id'
+            source_query = f"""
+            {{
+                source(func: eq(id, "{source_entity_id}")) @filter(eq(dgraph.type, "{source_entity_type}")) {{
+                    uid
+                }}
+            }}
+            """
+
+            target_query = f"""
+            {{
+                target(func: eq(id, "{target_entity_id}")) @filter(eq(dgraph.type, "{target_entity_type}")) {{
+                    uid
+                }}
+            }}
+            """
+
+            # Execute both queries
+            source_result = await self._execute_query(source_query)
+            target_result = await self._execute_query(target_query)
+
+            if not source_result.success or not source_result.data.get("source"):
+                logger.error(
+                    f"Source entity not found: {source_entity_type}/{source_entity_id}"
+                )
+                return False
+
+            if not target_result.success or not target_result.data.get("target"):
+                logger.error(
+                    f"Target entity not found: {target_entity_type}/{target_entity_id}"
+                )
+                return False
+
+            source_uid = source_result.data["source"][0]["uid"]
+            target_uid = target_result.data["target"][0]["uid"]
+
+            # Create the relationship using N-Quads
+            txn = self._client.txn()
+            try:
+                # Format: <source_uid> <relationship_type> <target_uid> .
+                nquad = f"<{source_uid}> <{relationship_type}> <{target_uid}> ."
+
+                mutation = pydgraph.Mutation(set_nquads=nquad.encode("utf-8"))
+                txn.mutate(mutation)
+                txn.commit()
+
+                logger.debug(
+                    f"Created {relationship_type} relationship: "
+                    f"{source_entity_type}/{source_entity_id} -> {target_entity_type}/{target_entity_id}"
+                )
+                return True
+
+            finally:
+                txn.discard()
+
+        except Exception as e:
+            logger.error(f"Failed to create relationship: {e}")
+            raise StorageOperationError(f"Relationship creation failed: {e}") from e
 
     async def find_entities_with_relationship(
         self,
@@ -805,7 +891,7 @@ class DgraphStorage(StorageInterface):
                 backend_specific={"query": query},
             )
 
-    async def _initialize_dgraph_schema(self) -> None:
+    async def _initialize_dgraph_schema(self) -> None:  # noqa: PLR0912
         """Initialize Dgraph schema from loaded entity schemas."""
         if not self._client:
             raise StorageConnectionError("Not connected to Dgraph")
@@ -820,7 +906,7 @@ class DgraphStorage(StorageInterface):
             ] = {}  # field_name -> (dgraph_type, index_type)
 
             # Add base predicates
-            all_predicates["entity_id"] = ("string", "exact")
+            all_predicates["id"] = ("string", "exact")
             all_predicates["entity_type"] = ("string", "exact")
             all_predicates["created_at"] = ("datetime", None)
             all_predicates["updated_at"] = ("datetime", None)
@@ -851,6 +937,24 @@ class DgraphStorage(StorageInterface):
                         index_type = self._get_index_type(field_def)
                         all_predicates[field_name] = (dgraph_type, index_type)
 
+                # Add relationships to global predicate registry
+                for relationship in schema.relationships:
+                    rel_name = relationship.name
+                    entity_field_sets[entity_type].add(rel_name)
+
+                    # Only add if not already defined (first definition wins)
+                    if rel_name not in all_predicates:
+                        # Convert relationship cardinality to Dgraph type
+                        if relationship.cardinality in ["one_to_many", "many_to_many"]:
+                            dgraph_type = "[uid]"
+                        else:  # many_to_one, one_to_one
+                            dgraph_type = "uid"
+
+                        all_predicates[rel_name] = (
+                            dgraph_type,
+                            None,
+                        )  # Relationships don't need indexing
+
             # Define all predicates once
             for field_name, (dgraph_type, index_type) in all_predicates.items():
                 if index_type:
@@ -863,7 +967,7 @@ class DgraphStorage(StorageInterface):
             # Define entity types
             for entity_type in self._schemas:
                 schema_parts.append(f"type {entity_type} {{")
-                schema_parts.append("  entity_id")
+                schema_parts.append("  id")
                 schema_parts.append("  entity_type")
 
                 # Add all fields for this entity type

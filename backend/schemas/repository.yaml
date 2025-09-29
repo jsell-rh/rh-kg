@@ -68,16 +68,6 @@ dgraph_predicates:
     index: [exact]
     description: "Git repository URL"
 
-  depends_on:
-    type: "[uid]"
-    reverse: true
-    description: "External dependencies"
-
-  internal_depends_on:
-    type: "[uid]"
-    reverse: true
-    description: "Internal dependencies"
-
 # Validation rules specific to repositories
 validation_rules:
   unique_name_per_namespace: true

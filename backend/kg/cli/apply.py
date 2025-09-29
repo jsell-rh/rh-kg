@@ -51,7 +51,11 @@ def _format_time_duration(seconds: float) -> str:
 
 
 def _extract_entities_from_yaml(parsed_data: dict[str, Any]) -> list[dict[str, Any]]:
-    """Extract entities from parsed YAML data for storage operations."""
+    """Extract entities from parsed YAML data for storage operations.
+
+    Separates entity metadata from relationships to maintain architectural
+    consistency with the schema definitions.
+    """
     entities = []
     namespace = parsed_data.get("namespace", "")
 
@@ -69,11 +73,30 @@ def _extract_entities_from_yaml(parsed_data: dict[str, Any]) -> list[dict[str, A
                                 else entity_name
                             )
 
+                            # Separate metadata from relationships
+                            metadata = {}
+                            relationships = {}
+
+                            for key, value in entity_data.items():
+                                if key == "relationships":
+                                    # Handle nested relationships structure
+                                    if isinstance(value, dict):
+                                        relationships.update(value)
+                                else:
+                                    # Regular metadata field
+                                    metadata[key] = value
+
+                            # For backward compatibility, also flatten relationship data
+                            # into metadata so existing dependency processing works
+                            if relationships:
+                                metadata.update(relationships)
+
                             entities.append(
                                 {
                                     "entity_type": entity_type,
                                     "entity_id": entity_id,
-                                    "metadata": entity_data,
+                                    "metadata": metadata,
+                                    "relationships": relationships,
                                     "system_metadata": {
                                         "namespace": namespace,
                                         "source_name": entity_name,
@@ -391,7 +414,7 @@ async def _apply_implementation(  # noqa: PLR0912, PLR0915
         # Load schemas
         try:
             backend_dir = Path(__file__).parent.parent.parent
-            schema_dir = backend_dir.parent / "spec" / "schemas"
+            schema_dir = backend_dir / "schemas"
 
             if not schema_dir.exists():
                 raise FileNotFoundError(f"Schema directory not found: {schema_dir}")

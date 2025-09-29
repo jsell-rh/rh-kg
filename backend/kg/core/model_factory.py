@@ -133,6 +133,17 @@ class DynamicModelFactory:
                 Field(default=None, **field_constraints),
             )
 
+        # Process relationship fields (added as optional list[str] fields)
+        for relationship in schema.relationships:
+            field_definitions[relationship.name] = (
+                list[str] | None,
+                Field(
+                    default=None,
+                    description=relationship.description
+                    or f"Relationship to {', '.join(relationship.target_types)}",
+                ),
+            )
+
         # Add custom validators based on field validation rules
         validators.update(self._create_field_validators(schema))
 
@@ -393,17 +404,25 @@ class DynamicModelFactory:
         """
         validators = {}
 
-        # Add dependency reference validation for repositories
-        # Only add the validator if the field actually exists
-        has_depends_on = any(
-            field.name == "depends_on"
-            for field in schema.required_fields + schema.optional_fields
-        )
+        # Add dependency reference validation based on target_types dynamically
+        for relationship in schema.relationships:
+            target_types = relationship.target_types
 
-        if schema.entity_type == "repository" and has_depends_on:
-            validators["validate_depends_on"] = field_validator("depends_on")(
-                self._validate_dependency_references
-            )
+            # If relationship targets external_dependency_version, validate external URIs
+            if "external_dependency_version" in target_types:
+                validators[f"validate_{relationship.name}"] = field_validator(
+                    relationship.name
+                )(self._validate_external_dependency_references)
+            # If relationship targets repository, validate internal URIs
+            elif "repository" in target_types:
+                validators[f"validate_{relationship.name}"] = field_validator(
+                    relationship.name
+                )(self._validate_internal_dependency_references)
+            # For other relationship types, apply generic reference validation
+            else:
+                validators[f"validate_{relationship.name}"] = field_validator(
+                    relationship.name
+                )(self._validate_generic_references)
 
         return validators
 
@@ -430,27 +449,70 @@ class DynamicModelFactory:
         return v
 
     @staticmethod
-    def _validate_dependency_references(v: list[str] | None) -> list[str] | None:
-        """Validate dependency reference URIs."""
+    def _validate_external_dependency_references(
+        v: list[str] | None,
+    ) -> list[str] | None:
+        """Validate external dependency reference URIs."""
         if v is None:
             return v
 
-        import re
+        from ..core.dependency_types import DependencyType
 
         for dep in v:
-            # Check external dependency format (allow @ in package names for npm scoped packages)
-            external_pattern = (
-                r"^external://[a-zA-Z0-9._-]+/[a-zA-Z0-9@._/-]+/[a-zA-Z0-9._-]+$"
-            )
-            # Check internal dependency format
-            internal_pattern = r"^internal://[a-z][a-z0-9_-]*[a-z0-9]/[a-zA-Z0-9._-]+$"
-
-            if not (re.match(external_pattern, dep) or re.match(internal_pattern, dep)):
+            dep_type = DependencyType.identify_dependency_type(dep)
+            if dep_type != DependencyType.EXTERNAL:
                 raise ValueError(
-                    f'Invalid dependency reference "{dep}". Must be either '
-                    '"external://<ecosystem>/<package>/<version>" or '
-                    '"internal://<namespace>/<entity-name>"'
+                    f'Expected external dependency reference, got "{dep}". '
+                    "Must use format: external://<ecosystem>/<package>/<version>"
                 )
+            # Additional validation using parse_uri to ensure format is correct
+            parsed = dep_type.parse_uri(dep)
+            if not parsed:
+                raise ValueError(
+                    f'Invalid external dependency format "{dep}". '
+                    "Must use format: external://<ecosystem>/<package>/<version>"
+                )
+
+        return v
+
+    @staticmethod
+    def _validate_internal_dependency_references(
+        v: list[str] | None,
+    ) -> list[str] | None:
+        """Validate internal dependency reference URIs."""
+        if v is None:
+            return v
+
+        from ..core.dependency_types import DependencyType
+
+        for dep in v:
+            dep_type = DependencyType.identify_dependency_type(dep)
+            if dep_type != DependencyType.INTERNAL:
+                raise ValueError(
+                    f'Expected internal dependency reference, got "{dep}". '
+                    "Must use format: internal://<namespace>/<entity-name>"
+                )
+            # Additional validation using parse_uri to ensure format is correct
+            parsed = dep_type.parse_uri(dep)
+            if not parsed:
+                raise ValueError(
+                    f'Invalid internal dependency format "{dep}". '
+                    "Must use format: internal://<namespace>/<entity-name>"
+                )
+
+        return v
+
+    @staticmethod
+    def _validate_generic_references(v: list[str] | None) -> list[str] | None:
+        """Validate generic reference URIs."""
+        if v is None:
+            return v
+
+        # For now, accept any non-empty strings for generic references
+        # This can be extended in the future based on specific relationship requirements
+        for ref in v:
+            if not isinstance(ref, str) or not ref.strip():
+                raise ValueError(f"Reference must be a non-empty string, got: {ref}")
 
         return v
 

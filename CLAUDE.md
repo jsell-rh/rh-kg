@@ -25,6 +25,8 @@
 ### Development Environment
 
 - **UV** for Python package and environment management
+- **Use `uv run` for all Python commands** - this ensures proper dependency resolution and virtual environment management
+- **Testing**: Always use `uv run pytest` instead of direct `pytest` to avoid dependency issues
 - **Monorepo structure** - all components in single repository
 - **Pre-commit hooks** must pass before any commit
 - **Conventional commits** for all commit messages (feat:, fix:, docs:, etc.)

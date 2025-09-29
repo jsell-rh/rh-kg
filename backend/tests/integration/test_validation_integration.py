@@ -21,7 +21,7 @@ class TestValidationIntegration:
     @pytest_asyncio.fixture
     async def loaded_schemas(self):
         """Load actual schemas from the spec directory."""
-        schema_path = Path(__file__).parent.parent.parent.parent / "spec" / "schemas"
+        schema_path = Path(__file__).parent.parent.parent / "schemas"
         loader = FileSchemaLoader(str(schema_path))
 
         schemas = await loader.load_schemas()
@@ -237,7 +237,7 @@ class TestErrorMessageQuality:
     @pytest_asyncio.fixture
     async def validator(self):
         """Create validator with real schemas."""
-        schema_path = Path(__file__).parent.parent.parent.parent / "spec" / "schemas"
+        schema_path = Path(__file__).parent.parent.parent / "schemas"
         loader = FileSchemaLoader(str(schema_path))
         schemas = await loader.load_schemas()
         return KnowledgeGraphValidator(schemas)
@@ -296,7 +296,7 @@ def demonstrate_validation_engine():
 
     async def run_demo():
         # Load real schemas
-        schema_path = Path(__file__).parent.parent.parent.parent / "spec" / "schemas"
+        schema_path = Path(__file__).parent.parent.parent / "schemas"
         loader = FileSchemaLoader(str(schema_path))
         result = await loader.load_schemas()
         schemas = result.schemas

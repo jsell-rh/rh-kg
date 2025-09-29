@@ -85,7 +85,7 @@ RUN uv sync --frozen --no-cache --no-dev
 COPY backend/kg/ ./kg/
 
 # Copy schema specifications (needed for schema loading)
-COPY spec/ ./spec/
+COPY ./schemas/ /app/spec/schemas/
 
 # Change ownership to non-root user
 RUN chown -R appuser:appuser /app
@@ -115,7 +115,7 @@ RUN uv sync --frozen --no-dev
 COPY backend/kg/ ./kg/
 
 # Copy schema specifications
-COPY spec/ ./spec/
+COPY ./schemas/ /app/spec/schemas/
 
 # Change ownership to non-root user
 RUN chown -R appuser:appuser /app

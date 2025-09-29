@@ -194,7 +194,7 @@ class TestFieldFormatValidator:
     @pytest_asyncio.fixture
     async def sample_schemas(self):
         """Load real entity schemas for testing."""
-        schema_path = Path(__file__).parent.parent.parent.parent / "spec" / "schemas"
+        schema_path = Path(__file__).parent.parent.parent / "schemas"
         loader = FileSchemaLoader(str(schema_path))
         schemas = await loader.load_schemas()
         return schemas
@@ -373,7 +373,7 @@ class TestKnowledgeGraphValidator:
     @pytest_asyncio.fixture
     async def sample_schemas(self):
         """Load real entity schemas from spec directory."""
-        schema_path = Path(__file__).parent.parent.parent.parent / "spec" / "schemas"
+        schema_path = Path(__file__).parent.parent.parent / "schemas"
         loader = FileSchemaLoader(str(schema_path))
         schemas = await loader.load_schemas()
         return schemas
@@ -486,7 +486,7 @@ class TestIntegrationScenarios:
     @pytest_asyncio.fixture
     async def complete_schemas(self):
         """Load complete entity schemas for realistic testing."""
-        schema_path = Path(__file__).parent.parent.parent.parent / "spec" / "schemas"
+        schema_path = Path(__file__).parent.parent.parent / "schemas"
         loader = FileSchemaLoader(str(schema_path))
         schemas = await loader.load_schemas()
         return schemas

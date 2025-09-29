@@ -192,6 +192,35 @@ class StorageInterface(ABC):
     # Relationship Operations
 
     @abstractmethod
+    async def create_relationship(
+        self,
+        source_entity_type: str,
+        source_entity_id: str,
+        relationship_type: str,
+        target_entity_type: str,
+        target_entity_id: str,
+    ) -> bool:
+        """Create a relationship between two entities.
+
+        Args:
+            source_entity_type: Type of the source entity
+            source_entity_id: ID of the source entity
+            relationship_type: Type of relationship (e.g., "depends_on", "has_version")
+            target_entity_type: Type of the target entity
+            target_entity_id: ID of the target entity
+
+        Returns:
+            True if relationship was created successfully
+
+        Raises:
+            StorageOperationError: If relationship creation fails
+
+        Example:
+            Create "depends_on" relationship from repository to external dependency
+        """
+        pass
+
+    @abstractmethod
     async def find_entities_with_relationship(
         self,
         entity_type: str,
