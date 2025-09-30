@@ -20,7 +20,7 @@ class DependencyReferenceValidator:
     SUPPORTED_ECOSYSTEMS: ClassVar[list[str]] = [
         "pypi",
         "npm",
-        "golang.org/x",
+        "golang.org",
         "github.com",
         "crates.io",
     ]

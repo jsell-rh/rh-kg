@@ -11,6 +11,8 @@ from typing import Any, ClassVar, Protocol
 from pydantic import ValidationError as PydanticValidationError
 import yaml
 
+from kg.validation.validators import DependencyReferenceValidator
+
 from ..core import DynamicModelFactory, EntitySchema
 from .errors import ValidationError
 
@@ -516,13 +518,8 @@ class BusinessLogicValidator:
         version = ref_parts[-1]
 
         # Validate ecosystem
-        supported_ecosystems = [
-            "pypi",
-            "npm",
-            "golang.org/x",
-            "github.com",
-            "crates.io",
-        ]
+        supported_ecosystems = DependencyReferenceValidator.SUPPORTED_ECOSYSTEMS
+
         if ecosystem not in supported_ecosystems:
             return ValidationError(
                 type="unsupported_ecosystem",
