@@ -120,11 +120,18 @@ class TestFileSchemaLoader:
 
     @pytest.fixture
     def temp_schema_dir(self):
-        """Create temporary directory with test schema files."""
+        """Create temporary directory with test schema files in new subdirectory structure."""
         with tempfile.TemporaryDirectory() as temp_dir:
             schema_dir = Path(temp_dir)
 
-            # Create base_internal.yaml
+            # Create _base directory structure
+            base_dir = schema_dir / "_base"
+            base_dir.mkdir()
+
+            # Create base_internal/1.0.0.yaml
+            base_internal_dir = base_dir / "base_internal"
+            base_internal_dir.mkdir()
+
             base_internal = {
                 "schema_type": "base_internal",
                 "schema_version": "1.0.0",
@@ -140,10 +147,13 @@ class TestFileSchemaLoader:
                 "deletion_policy": {"type": "reference_counted"},
             }
 
-            with (schema_dir / "base_internal.yaml").open("w") as f:
+            with (base_internal_dir / "1.0.0.yaml").open("w") as f:
                 yaml.dump(base_internal, f)
 
-            # Create base_external.yaml
+            # Create base_external/1.0.0.yaml
+            base_external_dir = base_dir / "base_external"
+            base_external_dir.mkdir()
+
             base_external = {
                 "schema_type": "base_external",
                 "schema_version": "1.0.0",
@@ -158,10 +168,13 @@ class TestFileSchemaLoader:
                 "validation_rules": {"unknown_fields": "warn"},
             }
 
-            with (schema_dir / "base_external.yaml").open("w") as f:
+            with (base_external_dir / "1.0.0.yaml").open("w") as f:
                 yaml.dump(base_external, f)
 
-            # Create test entity schema
+            # Create test_entity/1.0.0.yaml
+            test_entity_dir = schema_dir / "test_entity"
+            test_entity_dir.mkdir()
+
             test_entity = {
                 "entity_type": "test_entity",
                 "schema_version": "1.0.0",
@@ -194,7 +207,7 @@ class TestFileSchemaLoader:
                 "dgraph_predicates": {"name": {"type": "string", "index": ["exact"]}},
             }
 
-            with (schema_dir / "test_entity.yaml").open("w") as f:
+            with (test_entity_dir / "1.0.0.yaml").open("w") as f:
                 yaml.dump(test_entity, f)
 
             yield schema_dir
@@ -362,7 +375,10 @@ class TestFileSchemaLoader:
     @pytest.mark.asyncio
     async def test_inheritance_error_unknown_base(self, temp_schema_dir):
         """Test error when schema extends unknown base."""
-        # Create schema with invalid base
+        # Create schema with invalid base in proper subdirectory
+        bad_entity_dir = temp_schema_dir / "bad_entity"
+        bad_entity_dir.mkdir()
+
         bad_entity = {
             "entity_type": "bad_entity",
             "schema_version": "1.0.0",
@@ -373,19 +389,24 @@ class TestFileSchemaLoader:
             "dgraph_predicates": {},
         }
 
-        with (temp_schema_dir / "bad_entity.yaml").open("w") as f:
+        with (bad_entity_dir / "1.0.0.yaml").open("w") as f:
             yaml.dump(bad_entity, f)
 
         loader = FileSchemaLoader(str(temp_schema_dir))
 
-        with pytest.raises(SchemaLoadError, match="Failed to load schemas"):
+        with pytest.raises(
+            SchemaLoadError, match="Failed to load entity schema.*unknown base"
+        ):
             await loader.load_schemas()
 
     @pytest.mark.asyncio
     async def test_malformed_yaml(self, temp_schema_dir):
         """Test handling of malformed YAML files."""
-        # Create malformed YAML file
-        with (temp_schema_dir / "malformed.yaml").open("w") as f:
+        # Create malformed YAML file in proper subdirectory
+        malformed_dir = temp_schema_dir / "malformed_entity"
+        malformed_dir.mkdir()
+
+        with (malformed_dir / "1.0.0.yaml").open("w") as f:
             f.write("invalid: yaml: content: [unclosed")
 
         loader = FileSchemaLoader(str(temp_schema_dir))
@@ -396,19 +417,24 @@ class TestFileSchemaLoader:
     @pytest.mark.asyncio
     async def test_missing_required_fields(self, temp_schema_dir):
         """Test handling of schema missing required fields."""
-        # Create schema missing required fields
+        # Create schema missing required fields in proper subdirectory
+        incomplete_dir = temp_schema_dir / "incomplete_entity"
+        incomplete_dir.mkdir()
+
         incomplete_entity = {
             "entity_type": "incomplete_entity",  # Has entity_type so it will be processed
             # Missing schema_version which is required
             "description": "Incomplete entity",
         }
 
-        with (temp_schema_dir / "incomplete.yaml").open("w") as f:
+        with (incomplete_dir / "1.0.0.yaml").open("w") as f:
             yaml.dump(incomplete_entity, f)
 
         loader = FileSchemaLoader(str(temp_schema_dir))
 
-        with pytest.raises(SchemaLoadError, match="Required field missing"):
+        with pytest.raises(
+            SchemaLoadError, match="Schema file.*missing required 'schema_version'"
+        ):
             await loader.load_schemas()
 
     def test_get_load_result_no_load(self):
@@ -446,7 +472,10 @@ class TestFileSchemaLoader:
 
         time.sleep(0.1)
 
-        # Create a new schema file
+        # Create a new schema file in proper subdirectory
+        new_entity_dir = temp_schema_dir / "new_entity"
+        new_entity_dir.mkdir()
+
         new_entity = {
             "entity_type": "new_entity",
             "schema_version": "1.0.0",
@@ -457,7 +486,7 @@ class TestFileSchemaLoader:
             "dgraph_predicates": {"id": {"type": "string", "index": ["exact"]}},
         }
 
-        with (temp_schema_dir / "new_entity.yaml").open("w") as f:
+        with (new_entity_dir / "1.0.0.yaml").open("w") as f:
             yaml.dump(new_entity, f)
 
         # Reload
@@ -482,6 +511,10 @@ class TestFileSchemaLoader:
     @pytest.mark.asyncio
     async def test_schema_with_no_relationships(self, temp_schema_dir):
         """Test schema without relationships."""
+        # Create schema in proper subdirectory
+        simple_entity_dir = temp_schema_dir / "simple_entity"
+        simple_entity_dir.mkdir()
+
         simple_entity = {
             "entity_type": "simple_entity",
             "schema_version": "1.0.0",
@@ -491,7 +524,7 @@ class TestFileSchemaLoader:
             "dgraph_predicates": {"name": {"type": "string"}},
         }
 
-        with (temp_schema_dir / "simple_entity.yaml").open("w") as f:
+        with (simple_entity_dir / "1.0.0.yaml").open("w") as f:
             yaml.dump(simple_entity, f)
 
         loader = FileSchemaLoader(str(temp_schema_dir))

@@ -197,7 +197,7 @@ class FileSchemaLoader(SchemaLoader):
         return self.schemas.get(entity_type)
 
     async def _load_base_schemas(self, schema_path: Path) -> dict[str, dict[str, Any]]:
-        """Load base schema definitions.
+        """Load base schema definitions from _base/ subdirectories.
 
         Args:
             schema_path: Path to schema directory
@@ -205,29 +205,38 @@ class FileSchemaLoader(SchemaLoader):
         Returns:
             Dictionary of base schema data
         """
-        base_schemas = {}
+        base_schemas: dict[str, dict[str, Any]] = {}
+        base_dir = schema_path / "_base"
 
-        for base_file in ["base_internal.yaml", "base_external.yaml"]:
-            file_path = schema_path / base_file
-            if file_path.exists():
-                try:
-                    with file_path.open(encoding="utf-8") as f:
-                        schema_data = yaml.safe_load(f)
+        if not base_dir.exists():
+            return base_schemas
 
-                    base_name = base_file.replace(".yaml", "")
-                    base_schemas[base_name] = schema_data
+        # Scan _base/ for subdirectories (each is a base schema type)
+        for base_schema_dir in base_dir.iterdir():
+            if not base_schema_dir.is_dir():
+                continue
 
-                except (OSError, yaml.YAMLError) as e:
-                    raise SchemaLoadError(
-                        f"Failed to load base schema '{base_file}': {e}"
-                    ) from e
+            base_name = base_schema_dir.name
+
+            try:
+                # Load latest version of this base schema
+                schema_data = await self._load_latest_schema_version(base_schema_dir)
+                base_schemas[base_name] = schema_data
+
+            except Exception as e:
+                raise SchemaLoadError(
+                    f"Failed to load base schema '{base_name}': {e}"
+                ) from e
 
         return base_schemas
 
     async def _load_entity_schemas(
         self, schema_path: Path, base_schemas: dict[str, dict[str, Any]]
     ) -> dict[str, EntitySchema]:
-        """Load entity schema files and resolve inheritance.
+        """Load entity schema files from subdirectories and resolve inheritance.
+
+        Each subdirectory represents an entity type and contains versioned schema files.
+        Loads the latest version of each entity type.
 
         Args:
             schema_path: Path to schema directory
@@ -238,17 +247,27 @@ class FileSchemaLoader(SchemaLoader):
         """
         schemas = {}
 
-        for schema_file in schema_path.glob("*.yaml"):
-            if schema_file.name.startswith("base_"):
-                continue  # Skip base schemas
+        # Scan for subdirectories (each is an entity type)
+        for entity_dir in schema_path.iterdir():
+            if not entity_dir.is_dir():
+                continue
+
+            # Skip _base directory (already processed)
+            if entity_dir.name.startswith("_"):
+                continue
+
+            entity_type = entity_dir.name
 
             try:
-                with schema_file.open(encoding="utf-8") as f:
-                    schema_data = yaml.safe_load(f)
+                # Load latest version of this entity schema
+                schema_data = await self._load_latest_schema_version(entity_dir)
 
-                # Skip if not an entity schema (has entity_type field)
-                if "entity_type" not in schema_data:
-                    continue
+                # Validate entity_type matches directory name
+                if schema_data.get("entity_type") != entity_type:
+                    raise SchemaLoadError(
+                        f"Entity type mismatch in {entity_dir.name}: "
+                        f"directory name is '{entity_type}' but schema defines '{schema_data.get('entity_type')}'"
+                    )
 
                 # Resolve inheritance
                 resolved_schema = await self._resolve_inheritance(
@@ -259,9 +278,9 @@ class FileSchemaLoader(SchemaLoader):
                 entity_schema = await self._parse_entity_schema(resolved_schema)
                 schemas[entity_schema.entity_type] = entity_schema
 
-            except (OSError, yaml.YAMLError, KeyError) as e:
+            except Exception as e:
                 raise SchemaLoadError(
-                    f"Failed to load schema '{schema_file.name}': {e}"
+                    f"Failed to load entity schema '{entity_type}': {e}"
                 ) from e
 
         return schemas
@@ -312,6 +331,128 @@ class FileSchemaLoader(SchemaLoader):
         resolved["allow_custom_fields"] = base_schema.get("allow_custom_fields", False)
 
         return resolved
+
+    async def _load_latest_schema_version(self, schema_dir: Path) -> dict[str, Any]:
+        """Load the latest version of a schema from a versioned directory.
+
+        Args:
+            schema_dir: Directory containing versioned schema files (e.g., 1.0.0.yaml, 1.1.0.yaml)
+
+        Returns:
+            Schema data dictionary from the latest version
+
+        Raises:
+            SchemaLoadError: If no valid schema files found or version validation fails
+        """
+        version_files: list[tuple[tuple[int, int, int], Path]] = []
+
+        # Find all .yaml files and parse their versions
+        for schema_file in schema_dir.glob("*.yaml"):
+            filename_version = self._parse_version_from_filename(schema_file.name)
+            if filename_version:
+                version_files.append((filename_version, schema_file))
+
+        if not version_files:
+            raise SchemaLoadError(
+                f"No valid versioned schema files found in {schema_dir.name}/"
+            )
+
+        # Sort by version (descending) and get latest
+        version_files.sort(reverse=True, key=lambda x: x[0])
+        latest_version, latest_file = version_files[0]
+
+        # Load and validate the latest version
+        try:
+            with latest_file.open(encoding="utf-8") as f:
+                schema_data: dict[str, Any] = yaml.safe_load(f)
+
+            # Validate filename version matches schema_version in YAML
+            self._validate_version_match(
+                filename_version=latest_version,
+                schema_version=schema_data.get("schema_version"),
+                file_path=latest_file,
+            )
+
+            return schema_data
+
+        except (OSError, yaml.YAMLError) as e:
+            raise SchemaLoadError(
+                f"Failed to load schema from {latest_file}: {e}"
+            ) from e
+
+    def _parse_version_from_filename(
+        self, filename: str
+    ) -> tuple[int, int, int] | None:
+        """Parse semantic version from filename (e.g., '1.0.0.yaml' -> (1, 0, 0)).
+
+        Args:
+            filename: Schema filename
+
+        Returns:
+            Tuple of (major, minor, patch) or None if not a valid version filename
+        """
+        if not filename.endswith(".yaml"):
+            return None
+
+        version_str = filename.replace(".yaml", "")
+
+        try:
+            parts = version_str.split(".")
+            if len(parts) != 3:
+                return None
+
+            return (int(parts[0]), int(parts[1]), int(parts[2]))
+
+        except (ValueError, AttributeError):
+            return None
+
+    def _validate_version_match(
+        self,
+        filename_version: tuple[int, int, int],
+        schema_version: str | None,
+        file_path: Path,
+    ) -> None:
+        """Validate that filename version matches schema_version in YAML.
+
+        Args:
+            filename_version: Version parsed from filename
+            schema_version: schema_version field from YAML
+            file_path: Path to schema file (for error messages)
+
+        Raises:
+            SchemaLoadError: If versions don't match or schema_version is missing
+        """
+        if not schema_version:
+            raise SchemaLoadError(
+                f"Schema file {file_path} missing required 'schema_version' field"
+            )
+
+        # Parse schema_version from YAML
+        try:
+            schema_parts = schema_version.split(".")
+            if len(schema_parts) != 3:
+                raise ValueError("Invalid semantic version format")
+
+            yaml_version = (
+                int(schema_parts[0]),
+                int(schema_parts[1]),
+                int(schema_parts[2]),
+            )
+
+        except (ValueError, AttributeError) as e:
+            raise SchemaLoadError(
+                f"Invalid schema_version '{schema_version}' in {file_path}: {e}"
+            ) from e
+
+        # Strict validation: versions must match exactly
+        if filename_version != yaml_version:
+            filename_version_str = (
+                f"{filename_version[0]}.{filename_version[1]}.{filename_version[2]}"
+            )
+            raise SchemaLoadError(
+                f"Version mismatch in {file_path}: "
+                f"filename indicates '{filename_version_str}' but schema_version is '{schema_version}'"
+            )
 
     async def _parse_entity_schema(self, schema_data: dict[str, Any]) -> EntitySchema:
         """Convert schema data dictionary to EntitySchema object.
