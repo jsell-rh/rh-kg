@@ -21,7 +21,9 @@ The validation process follows a strict pipeline with early exit on critical fai
    ↓ (collect all logic errors)
 5. Reference Validation (optional)
    ↓ (validate external references exist)
-6. Final Validation Report
+6. Deprecation Checking
+   ↓ (collect deprecation warnings)
+7. Final Validation Report
 ```
 
 ### Validation Modes
@@ -433,6 +435,211 @@ class ReferenceValidator:
         return errors
 ```
 
+### Layer 6: Deprecation Checking
+
+#### Purpose
+
+Detect usage of deprecated fields, entity types, and relationships, emitting warnings with migration guidance.
+
+#### Implementation
+
+```python
+class DeprecationValidator:
+    """Validates and warns about deprecated schema elements."""
+
+    def __init__(self, entity_schemas: dict[str, EntitySchema]):
+        self.entity_schemas = entity_schemas
+
+    async def validate(self, data: dict[str, Any]) -> list[ValidationWarning]:
+        """Check for usage of deprecated fields and emit warnings."""
+        warnings = []
+
+        entities = data.get("entity", {})
+
+        for entity_type, entity_list in entities.items():
+            if entity_type not in self.entity_schemas:
+                continue
+
+            schema = self.entity_schemas[entity_type]
+
+            # Check if entity type itself is deprecated
+            if schema.deprecated:
+                warnings.extend(self._create_entity_type_warning(
+                    entity_type=entity_type,
+                    schema=schema,
+                    entity_count=len(entity_list)
+                ))
+
+            # Check each entity instance for deprecated fields
+            for entity_data in entity_list:
+                for entity_name, entity_fields in entity_data.items():
+                    warnings.extend(self._check_deprecated_fields(
+                        entity_type=entity_type,
+                        entity_name=entity_name,
+                        entity_fields=entity_fields,
+                        schema=schema
+                    ))
+
+        return warnings
+
+    def _create_entity_type_warning(
+        self,
+        entity_type: str,
+        schema: EntitySchema,
+        entity_count: int
+    ) -> list[ValidationWarning]:
+        """Create warning for deprecated entity type."""
+        warning = ValidationWarning(
+            type="deprecated_entity_type",
+            message=f"Entity type '{entity_type}' is deprecated (used {entity_count} times)",
+            field="entity",
+            help=self._format_deprecation_help(schema.deprecation_info)
+        )
+        return [warning]
+
+    def _check_deprecated_fields(
+        self,
+        entity_type: str,
+        entity_name: str,
+        entity_fields: dict[str, Any],
+        schema: EntitySchema
+    ) -> list[ValidationWarning]:
+        """Check entity fields for deprecated usage."""
+        warnings = []
+
+        # Check regular fields
+        for field_name, field_value in entity_fields.items():
+            if field_name == "metadata":
+                # Handle metadata fields separately
+                warnings.extend(self._check_metadata_deprecations(
+                    entity_type=entity_type,
+                    entity_name=entity_name,
+                    metadata=field_value,
+                    schema=schema
+                ))
+                continue
+
+            field_schema = schema.fields.get(field_name)
+            if field_schema and field_schema.deprecated:
+                warnings.append(ValidationWarning(
+                    type="deprecated_field",
+                    field=field_name,
+                    entity=entity_name,
+                    message=f"Field '{field_name}' is deprecated in {entity_type} '{entity_name}'",
+                    help=self._format_deprecation_help(field_schema.deprecation_info)
+                ))
+
+        # Check relationships
+        for rel_name, rel_targets in entity_fields.items():
+            rel_schema = schema.relationships.get(rel_name)
+            if rel_schema and rel_schema.deprecated:
+                warnings.append(ValidationWarning(
+                    type="deprecated_relationship",
+                    field=rel_name,
+                    entity=entity_name,
+                    message=f"Relationship '{rel_name}' is deprecated in {entity_type} '{entity_name}'",
+                    help=self._format_deprecation_help(rel_schema.deprecation_info)
+                ))
+
+        return warnings
+
+    def _check_metadata_deprecations(
+        self,
+        entity_type: str,
+        entity_name: str,
+        metadata: dict[str, Any],
+        schema: EntitySchema
+    ) -> list[ValidationWarning]:
+        """Check metadata fields for deprecations."""
+        warnings = []
+
+        for meta_field, meta_value in metadata.items():
+            # Check if this metadata field is deprecated in schema
+            if hasattr(schema, 'metadata_fields'):
+                meta_schema = schema.metadata_fields.get(meta_field)
+                if meta_schema and meta_schema.deprecated:
+                    warnings.append(ValidationWarning(
+                        type="deprecated_metadata_field",
+                        field=f"metadata.{meta_field}",
+                        entity=entity_name,
+                        message=f"Metadata field '{meta_field}' is deprecated in {entity_type} '{entity_name}'",
+                        help=self._format_deprecation_help(meta_schema.deprecation_info)
+                    ))
+
+        return warnings
+
+    def _format_deprecation_help(self, deprecation_info: DeprecationInfo) -> str:
+        """Format deprecation information as help text."""
+        help_parts = []
+
+        if deprecation_info.deprecated_since:
+            help_parts.append(f"Deprecated since: {deprecation_info.deprecated_since}")
+
+        if deprecation_info.deprecated_reason:
+            help_parts.append(f"Reason: {deprecation_info.deprecated_reason}")
+
+        if deprecation_info.removal_planned:
+            help_parts.append(f"Removal planned: {deprecation_info.removal_planned}")
+
+        if deprecation_info.migration_guide:
+            help_parts.append(f"Migration:\n{deprecation_info.migration_guide}")
+
+        return " | ".join(help_parts) if help_parts else "No migration guidance available"
+```
+
+#### Deprecation Info Model
+
+```python
+from dataclasses import dataclass
+from typing import Optional
+
+@dataclass
+class DeprecationInfo:
+    """Deprecation metadata for schema elements."""
+    deprecated: bool = False
+    deprecated_since: Optional[str] = None
+    deprecated_reason: Optional[str] = None
+    removal_planned: Optional[str] = None
+    migration_guide: Optional[str] = None
+```
+
+#### Warning Examples
+
+**Deprecated Field Usage:**
+
+```python
+ValidationWarning(
+    type="deprecated_field",
+    field="legacy_owner",
+    entity="test-repo",
+    message="Field 'legacy_owner' is deprecated in repository 'test-repo'",
+    help="Deprecated since: 1.2.0 | Reason: Use metadata.owners array instead | Removal planned: 2.0.0 | Migration: Replace legacy_owner with metadata.owners array"
+)
+```
+
+**Deprecated Relationship Usage:**
+
+```python
+ValidationWarning(
+    type="deprecated_relationship",
+    field="legacy_depends_on",
+    entity="test-service",
+    message="Relationship 'legacy_depends_on' is deprecated in service 'test-service'",
+    help="Deprecated since: 1.3.0 | Reason: Use new depends_on with URI format | Removal planned: 2.0.0"
+)
+```
+
+**Deprecated Entity Type:**
+
+```python
+ValidationWarning(
+    type="deprecated_entity_type",
+    field="entity",
+    message="Entity type 'legacy_component' is deprecated (used 3 times)",
+    help="Deprecated since: 1.4.0 | Reason: Use 'control_plane_component' instead | Removal planned: 3.0.0"
+)
+```
+
 ## Validation Orchestrator
 
 ### Main Validator Class
@@ -455,6 +662,7 @@ class KnowledgeGraphValidator:
         self.format_validator = FieldFormatValidator(entity_schemas)
         self.business_validator = BusinessLogicValidator(entity_schemas)
         self.reference_validator = ReferenceValidator(storage)
+        self.deprecation_validator = DeprecationValidator(entity_schemas)
 
     async def validate(self, content: str) -> ValidationResult:
         """
@@ -507,6 +715,10 @@ class KnowledgeGraphValidator:
         if self.storage:
             reference_errors = await self.reference_validator.validate(model)
             errors.extend(reference_errors)
+
+        # Layer 6: Deprecation Checking (always run, emits warnings not errors)
+        deprecation_warnings = await self.deprecation_validator.validate(data)
+        warnings.extend(deprecation_warnings)
 
         # Determine final validation result
         is_valid = len(errors) == 0
@@ -655,6 +867,47 @@ class TestValidationLayers:
         model, errors = FieldFormatValidator().validate(data)
         assert model is None
         assert any(e.type == "invalid_email_format" for e in errors)
+
+    async def test_deprecation_validation(self):
+        """Test deprecation warning generation."""
+        # Schema with deprecated field
+        schema = EntitySchema(
+            entity_type="repository",
+            fields={
+                "legacy_owner": FieldSchema(
+                    type="string",
+                    deprecated=True,
+                    deprecation_info=DeprecationInfo(
+                        deprecated=True,
+                        deprecated_since="1.2.0",
+                        deprecated_reason="Use metadata.owners instead"
+                    )
+                )
+            }
+        )
+
+        # Data using deprecated field
+        data = {
+            "schema_version": "1.0.0",
+            "namespace": "test",
+            "entity": {
+                "repository": [{
+                    "test-repo": {
+                        "legacy_owner": "team@redhat.com",
+                        "metadata": {"owners": ["team@redhat.com"]},
+                        "depends_on": []
+                    }
+                }]
+            }
+        }
+
+        validator = DeprecationValidator(entity_schemas={"repository": schema})
+        warnings = await validator.validate(data)
+
+        assert len(warnings) == 1
+        assert warnings[0].type == "deprecated_field"
+        assert warnings[0].field == "legacy_owner"
+        assert "1.2.0" in warnings[0].help
 ```
 
 ### Integration Test Coverage
@@ -705,6 +958,53 @@ class TestValidationIntegration:
         error_types = [e.type for e in result.errors]
         assert "unsupported_schema_version" in error_types
         assert "empty_required_array" in error_types
+
+    async def test_validation_with_deprecation_warnings(self):
+        """Test validation passes with deprecation warnings."""
+        # YAML using deprecated field
+        yaml_content = """
+        schema_version: "1.0.0"
+        namespace: "test"
+        entity:
+          repository:
+            - test-repo:
+                legacy_owner: "team@redhat.com"
+                metadata:
+                  owners: ["team@redhat.com"]
+                  git_repo_url: "https://github.com/test/repo"
+                depends_on: []
+        """
+
+        # Create validator with schema containing deprecated field
+        entity_schemas = {
+            "repository": EntitySchema(
+                entity_type="repository",
+                fields={
+                    "legacy_owner": FieldSchema(
+                        type="string",
+                        deprecated=True,
+                        deprecation_info=DeprecationInfo(
+                            deprecated=True,
+                            deprecated_since="1.2.0",
+                            deprecated_reason="Use metadata.owners instead",
+                            removal_planned="2.0.0"
+                        )
+                    )
+                }
+            )
+        }
+
+        validator = KnowledgeGraphValidator(entity_schemas=entity_schemas)
+        result = await validator.validate(yaml_content)
+
+        # Validation should pass despite deprecation
+        assert result.is_valid
+        assert len(result.errors) == 0
+
+        # But warnings should be present
+        assert len(result.warnings) >= 1
+        assert any(w.type == "deprecated_field" for w in result.warnings)
+        assert any(w.field == "legacy_owner" for w in result.warnings)
 ```
 
 This validation specification provides comprehensive validation logic that ensures data quality while providing clear, actionable error messages to users.

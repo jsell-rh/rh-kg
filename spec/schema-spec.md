@@ -154,6 +154,47 @@ git_repo_url: "file:///local/path"  # Must be HTTP/HTTPS
 git_repo_url: ""                    # Cannot be empty
 ```
 
+### Field Deprecation Support
+
+Any schema field can be marked as deprecated using deprecation metadata. Deprecated fields remain functional but emit warnings during validation.
+
+#### Deprecation Metadata Fields
+
+All deprecation fields are OPTIONAL and apply to entity type fields, relationship definitions, and metadata fields:
+
+- `deprecated` (boolean): Marks field as deprecated
+- `deprecated_since` (string): Schema version when deprecation began (semantic version)
+- `deprecated_reason` (string): Human-readable explanation of why field is deprecated
+- `removal_planned` (string): Schema version when field may be removed (semantic version)
+- `migration_guide` (string): Instructions for migrating away from deprecated field
+
+#### Deprecated Field Example
+
+```yaml
+# In schema definition YAML (backend/schemas/repository.yaml)
+fields:
+  legacy_owner:
+    type: string
+    required: false
+    deprecated: true
+    deprecated_since: "1.2.0"
+    deprecated_reason: "Use metadata.owners array instead for multi-owner support"
+    removal_planned: "2.0.0"
+    migration_guide: |
+      Replace:
+        legacy_owner: "team@redhat.com"
+      With:
+        metadata:
+          owners: ["team@redhat.com"]
+```
+
+#### Deprecation Validation Behavior
+
+- **Deprecated fields ARE still validated** - type and format rules still apply
+- **Warnings are emitted** when deprecated fields are used
+- **Validation does NOT fail** due to deprecation alone
+- **Migration guidance is included** in warning messages
+
 #### depends_on (REQUIRED)
 
 - **Type:** Array of strings
@@ -321,6 +362,21 @@ ValidationError: Invalid dependency reference 'requests' in repository 'test-rep
 ValidationError: Invalid email 'not-an-email' in owners for repository 'test-repo'
   Expected format: user@domain.com
   Help: All owners must be valid email addresses.
+```
+
+### Deprecation Warning
+
+```
+DeprecationWarning: Field 'legacy_owner' is deprecated in repository 'test-repo'
+  Deprecated since: 1.2.0
+  Reason: Use metadata.owners array instead for multi-owner support
+  Removal planned: 2.0.0
+  Migration guide:
+    Replace:
+      legacy_owner: "team@redhat.com"
+    With:
+      metadata:
+        owners: ["team@redhat.com"]
 ```
 
 ## Future Evolution

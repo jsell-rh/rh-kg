@@ -31,6 +31,12 @@ type Repository {
   source_repo: string         # Which repository submitted this data
   source_commit: string       # Git commit hash of submission
 
+  # Deprecation metadata (optional)
+  deprecated: bool            # Flag indicating if this entity is deprecated
+  deprecated_since: string    # Schema version when deprecation was introduced
+  deprecated_reason: string   # Explanation for deprecation
+  removal_planned: string     # Schema version when removal is planned (optional)
+
   # Type identifier
   dgraph.type: Repository
 }
@@ -99,6 +105,12 @@ type ExternalDependencyPackage {
   created_at: datetime
   first_referenced_by: string # Repository ID that first referenced this package
 
+  # Deprecation metadata (optional)
+  deprecated: bool            # Flag indicating if this package is deprecated
+  deprecated_since: string    # Schema version when deprecation was introduced
+  deprecated_reason: string   # Explanation for deprecation
+  removal_planned: string     # Schema version when removal is planned (optional)
+
   # Type identifier
   dgraph.type: ExternalDependencyPackage
 }
@@ -137,6 +149,12 @@ type ExternalDependencyVersion {
   created_at: datetime
   first_referenced_by: string
   reference_count: int @index(int)
+
+  # Deprecation metadata (optional)
+  deprecated: bool            # Flag indicating if this version is deprecated
+  deprecated_since: string    # Schema version when deprecation was introduced
+  deprecated_reason: string   # Explanation for deprecation
+  removal_planned: string     # Schema version when removal is planned (optional)
 
   # Type identifier
   dgraph.type: ExternalDependencyVersion
@@ -393,41 +411,170 @@ query {
 }
 ```
 
+## Deprecation Management
+
+### Deprecation Metadata
+
+All node types support deprecation metadata to enable safe schema evolution without breaking changes.
+
+#### Deprecation Fields
+
+**deprecated (optional)**
+
+- Type: boolean
+- Default: false
+- Marks entity as deprecated when true
+
+**deprecated_since (optional)**
+
+- Type: string
+- Format: semantic version (e.g., "1.2.0")
+- Schema version when deprecation was introduced
+
+**deprecated_reason (optional)**
+
+- Type: string
+- Human-readable explanation for deprecation
+- Should include guidance on replacement
+
+**removal_planned (optional)**
+
+- Type: string
+- Format: semantic version (e.g., "2.0.0")
+- Schema version when removal is planned
+
+#### Example Deprecated Repository
+
+```json
+{
+  "uid": "0x1",
+  "dgraph.type": ["Repository"],
+  "id": "legacy-namespace/old-service",
+  "name": "old-service",
+  "namespace": "legacy-namespace",
+  "owners": ["legacy-team@redhat.com"],
+  "git_repo_url": "https://github.com/legacy/old-service",
+  "deprecated": true,
+  "deprecated_since": "1.3.0",
+  "deprecated_reason": "Replaced by new-namespace/modern-service for improved architecture",
+  "removal_planned": "2.0.0"
+}
+```
+
+### Deprecation Lifecycle
+
+1. **Active** - Normal entity, no deprecation metadata
+2. **Deprecated** - Entity marked deprecated but functional
+3. **Legacy** - Deprecated entity with planned removal version
+4. **Removal Eligible** - Entity can be removed in major version update
+
+### Deprecation Queries
+
+#### Find All Deprecated Entities
+
+```graphql
+query {
+  deprecated_repositories(func: eq(deprecated, true)) @filter(type(Repository)) {
+    id
+    name
+    namespace
+    deprecated_since
+    deprecated_reason
+    removal_planned
+  }
+
+  deprecated_packages(func: eq(deprecated, true)) @filter(type(ExternalDependencyPackage)) {
+    id
+    package_name
+    ecosystem
+    deprecated_since
+    deprecated_reason
+  }
+}
+```
+
+#### Find Entities Eligible for Removal
+
+```graphql
+query($target_version: string) {
+  eligible_for_removal(func: eq(removal_planned, $target_version)) {
+    expand(_all_) {
+      expand(_all_)
+    }
+  }
+}
+```
+
+#### Check Repository Dependencies on Deprecated Entities
+
+```graphql
+query($repo_id: string) {
+  repository(func: eq(id, $repo_id)) {
+    depends_on @filter(eq(deprecated, true)) {
+      id
+      package_name
+      version
+      deprecated_reason
+      removal_planned
+    }
+    internal_depends_on @filter(eq(deprecated, true)) {
+      id
+      name
+      namespace
+      deprecated_reason
+      removal_planned
+    }
+  }
+}
+```
+
 ## Schema Evolution
 
 ### Version 1.0.0 Schema
 
 Current minimal schema with Repository and ExternalDependency types only.
 
-### Planned Schema Changes
+### Additive-Only Evolution Strategy
 
-#### Version 1.1.0 (Additive)
+Following the additive-only evolution approach:
 
-- Add Service node type
-- Add additional node type
-- Maintain backwards compatibility
+#### Allowed Changes (Minor Version Increments)
 
-#### Version 2.0.0 (Breaking)
+- Add new node types
+- Add new optional fields to existing nodes
+- Add new relationships
+- Add indexes to existing fields
+- Deprecate existing elements
 
-- Add relationship metadata (criticality, type)
-- Modify dependency relationship structure
-- Provide migration scripts
+#### Forbidden Changes
+
+- Remove fields or relationships
+- Change field types
+- Make optional fields required
+- Remove relationship target types
 
 ### Migration Strategy
 
-#### Additive Changes
+#### Additive Changes Only
 
 - Add new node types without affecting existing data
 - Add new predicates without removing old ones
 - Extend existing types with new optional fields
+- Use deprecation instead of removal
 
-#### Breaking Changes
+#### Major Version Boundaries
 
-- Export data before migration
-- Apply schema changes
-- Run data transformation scripts
-- Verify data integrity
-- Provide rollback capability
+Reserved for rare cases requiring breaking changes:
+
+- Removal of extensively deprecated elements
+- Fundamental architectural changes
+- Performance-critical restructuring
+
+Major versions require:
+
+- Extensive deprecation period (minimum 6 months)
+- Migration tooling provided
+- Formal approval process
 
 ## Performance Considerations
 
