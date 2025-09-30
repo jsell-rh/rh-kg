@@ -42,16 +42,13 @@ class JSONSchemaGenerator:
             "title": "Red Hat Knowledge Graph Schema",
             "description": "Schema for Red Hat knowledge graph YAML files",
             "type": "object",
-            "required": ["schema_version", "namespace", "entity"],
+            "required": ["namespace", "entity"],
             "additionalProperties": False,
             "properties": {},
             "$defs": {},
         }
 
         # Add top-level properties
-        json_schema["properties"]["schema_version"] = (
-            self._generate_schema_version_property()
-        )
         json_schema["properties"]["namespace"] = self._generate_namespace_property()
 
         # Generate entity definitions
@@ -72,21 +69,6 @@ class JSONSchemaGenerator:
         )
 
         return json_schema
-
-    @staticmethod
-    def _generate_schema_version_property() -> dict[str, Any]:
-        """Generate schema_version property definition.
-
-        Returns:
-            JSON Schema property for schema_version
-        """
-        return {
-            "type": "string",
-            "pattern": r"^\d+\.\d+\.\d+$",
-            "description": "Semantic version of the schema (MAJOR.MINOR.PATCH)",
-            "examples": ["1.0.0"],
-            "const": "1.0.0",
-        }
 
     @staticmethod
     def _generate_namespace_property() -> dict[str, Any]:

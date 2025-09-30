@@ -3,6 +3,7 @@
 import rich_click as click
 
 from .apply import apply_command
+from .schema import schema_command
 from .validate import validate_command
 
 # Configure rich-click styling
@@ -29,6 +30,7 @@ def main() -> None:
 
 # Add commands to the group
 main.add_command(apply_command)
+main.add_command(schema_command)
 main.add_command(validate_command)
 
 

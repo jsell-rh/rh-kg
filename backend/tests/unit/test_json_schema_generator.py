@@ -317,7 +317,7 @@ class TestJSONSchemaTopLevelStructure:
         with tempfile.TemporaryDirectory() as tmpdir:
             schema_dir = Path(tmpdir)
 
-            # Create base_internal schema (flat structure)
+            # Create base_internal schema (versioned directory structure)
             base_internal = {
                 "schema_type": "base_internal",
                 "schema_version": "1.0.0",
@@ -330,7 +330,7 @@ class TestJSONSchemaTopLevelStructure:
                 "allow_custom_fields": False,
             }
 
-            # Create repository schema (flat structure)
+            # Create repository schema (versioned directory structure)
             repository_schema = {
                 "entity_type": "repository",
                 "schema_version": "1.0.0",
@@ -350,11 +350,18 @@ class TestJSONSchemaTopLevelStructure:
                 "dgraph_type": "Repository",
             }
 
-            (schema_dir / "base_internal.yaml").write_text(
+            # Create versioned directory structure
+            # Base schemas go in _base directory
+            base_internal_dir = schema_dir / "_base" / "base_internal"
+            base_internal_dir.mkdir(parents=True)
+            (base_internal_dir / "1.0.0.yaml").write_text(
                 yaml.dump(base_internal), encoding="utf-8"
             )
 
-            (schema_dir / "repository.yaml").write_text(
+            # Entity schemas get their own versioned directories
+            repository_dir = schema_dir / "repository"
+            repository_dir.mkdir(parents=True)
+            (repository_dir / "1.0.0.yaml").write_text(
                 yaml.dump(repository_schema), encoding="utf-8"
             )
 
@@ -381,7 +388,7 @@ class TestJSONSchemaTopLevelStructure:
 
         json_schema = await generator.generate()
 
-        assert set(json_schema["required"]) == {"schema_version", "namespace", "entity"}
+        assert set(json_schema["required"]) == {"namespace", "entity"}
 
     @pytest.mark.asyncio
     async def test_json_schema_properties(self, temp_schemas):
@@ -391,22 +398,8 @@ class TestJSONSchemaTopLevelStructure:
 
         json_schema = await generator.generate()
 
-        assert "schema_version" in json_schema["properties"]
         assert "namespace" in json_schema["properties"]
         assert "entity" in json_schema["properties"]
-
-    @pytest.mark.asyncio
-    async def test_schema_version_definition(self, temp_schemas):
-        """Test schema_version property definition."""
-        loader = FileSchemaLoader(str(temp_schemas))
-        generator = JSONSchemaGenerator(loader)
-
-        json_schema = await generator.generate()
-
-        version_prop = json_schema["properties"]["schema_version"]
-        assert version_prop["type"] == "string"
-        assert version_prop["pattern"] == r"^\d+\.\d+\.\d+$"
-        assert version_prop["const"] == "1.0.0"
 
     @pytest.mark.asyncio
     async def test_namespace_definition(self, temp_schemas):
@@ -436,9 +429,9 @@ class TestJSONSchemaTopLevelStructure:
     @pytest.mark.asyncio
     async def test_entity_types_included(self, temp_schemas):
         """Test all entity types are included in entity container."""
-        # Verify fixture created files
-        assert (temp_schemas / "repository.yaml").exists()
-        assert (temp_schemas / "base_internal.yaml").exists()
+        # Verify fixture created files (versioned structure)
+        assert (temp_schemas / "repository" / "1.0.0.yaml").exists()
+        assert (temp_schemas / "_base" / "base_internal" / "1.0.0.yaml").exists()
 
         loader = FileSchemaLoader(str(temp_schemas))
         generator = JSONSchemaGenerator(loader)
@@ -451,8 +444,8 @@ class TestJSONSchemaTopLevelStructure:
     @pytest.mark.asyncio
     async def test_definitions_section(self, temp_schemas):
         """Test $defs section contains entity and reference definitions."""
-        # Verify fixture created files
-        assert (temp_schemas / "repository.yaml").exists()
+        # Verify fixture created files (versioned structure)
+        assert (temp_schemas / "repository" / "1.0.0.yaml").exists()
 
         loader = FileSchemaLoader(str(temp_schemas))
         generator = JSONSchemaGenerator(loader)
@@ -531,7 +524,7 @@ class TestJSONSchemaExporter:
             schema_dir.mkdir()
             output_file = Path(tmpdir) / "schema.json"
 
-            # Create minimal schema (flat structure)
+            # Create minimal schema (versioned directory structure)
             base_internal = {
                 "schema_type": "base_internal",
                 "schema_version": "1.0.0",
@@ -555,10 +548,14 @@ class TestJSONSchemaExporter:
                 "dgraph_type": "Repository",
             }
 
-            (schema_dir / "base_internal.yaml").write_text(
+            base_internal_dir = schema_dir / "_base" / "base_internal"
+            base_internal_dir.mkdir(parents=True)
+            (base_internal_dir / "1.0.0.yaml").write_text(
                 yaml.dump(base_internal), encoding="utf-8"
             )
-            (schema_dir / "repository.yaml").write_text(
+            repository_dir = schema_dir / "repository"
+            repository_dir.mkdir(parents=True)
+            (repository_dir / "1.0.0.yaml").write_text(
                 yaml.dump(repository), encoding="utf-8"
             )
 
@@ -584,7 +581,7 @@ class TestJSONSchemaExporter:
             schema_dir.mkdir()
             output_file = Path(tmpdir) / "schema.json"
 
-            # Create minimal schema (flat structure)
+            # Create minimal schema (versioned directory structure)
             base = {
                 "schema_type": "base_internal",
                 "schema_version": "1.0.0",
@@ -595,7 +592,9 @@ class TestJSONSchemaExporter:
                 "allow_custom_fields": False,
             }
 
-            (schema_dir / "base_internal.yaml").write_text(
+            base_internal_dir = schema_dir / "_base" / "base_internal"
+            base_internal_dir.mkdir(parents=True)
+            (base_internal_dir / "1.0.0.yaml").write_text(
                 yaml.dump(base), encoding="utf-8"
             )
 
@@ -616,7 +615,7 @@ class TestJSONSchemaExporter:
             schema_dir.mkdir()
             output_file = Path(tmpdir) / "schema.json"
 
-            # Create minimal schema (flat structure)
+            # Create minimal schema (versioned directory structure)
             base = {
                 "schema_type": "base_internal",
                 "schema_version": "1.0.0",
@@ -627,7 +626,9 @@ class TestJSONSchemaExporter:
                 "allow_custom_fields": False,
             }
 
-            (schema_dir / "base_internal.yaml").write_text(
+            base_internal_dir = schema_dir / "_base" / "base_internal"
+            base_internal_dir.mkdir(parents=True)
+            (base_internal_dir / "1.0.0.yaml").write_text(
                 yaml.dump(base), encoding="utf-8"
             )
 
