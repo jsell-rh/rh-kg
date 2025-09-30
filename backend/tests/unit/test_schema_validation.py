@@ -46,12 +46,18 @@ relationships:
 dgraph_type: TestEntity
 """
 
-        # Create temporary schema directory
+        # Create temporary schema directory with new subdirectory structure
         with tempfile.TemporaryDirectory() as temp_dir:
             schema_dir = Path(temp_dir)
 
+            # Create _base directory structure
+            base_dir = schema_dir / "_base"
+            base_dir.mkdir()
+            base_internal_dir = base_dir / "base_internal"
+            base_internal_dir.mkdir()
+
             # Write base schema
-            base_schema_path = schema_dir / "base_internal.yaml"
+            base_schema_path = base_internal_dir / "1.0.0.yaml"
             base_schema_content = """
 schema_type: base_internal
 schema_version: "1.0.0"
@@ -76,8 +82,10 @@ allow_custom_fields: false
 """
             base_schema_path.write_text(base_schema_content)
 
-            # Write conflicting schema
-            entity_schema_path = schema_dir / "test_entity.yaml"
+            # Write conflicting schema in subdirectory
+            entity_dir = schema_dir / "test_entity"
+            entity_dir.mkdir()
+            entity_schema_path = entity_dir / "1.0.0.yaml"
             entity_schema_path.write_text(schema_with_conflict)
 
             # Create schema loader
@@ -122,12 +130,18 @@ relationships:
 dgraph_type: TestEntity
 """
 
-        # Create temporary schema directory
+        # Create temporary schema directory with new subdirectory structure
         with tempfile.TemporaryDirectory() as temp_dir:
             schema_dir = Path(temp_dir)
 
-            # Write base schema
-            base_schema_path = schema_dir / "base_internal.yaml"
+            # Create _base directory structure
+            base_dir = schema_dir / "_base"
+            base_dir.mkdir()
+
+            # Write base_internal schema
+            base_internal_dir = base_dir / "base_internal"
+            base_internal_dir.mkdir()
+            base_schema_path = base_internal_dir / "1.0.0.yaml"
             base_schema_content = """
 schema_type: base_internal
 schema_version: "1.0.0"
@@ -152,29 +166,10 @@ allow_custom_fields: false
 """
             base_schema_path.write_text(base_schema_content)
 
-            # Write external dependency version schema (referenced in relationship)
-            ext_dep_schema_path = schema_dir / "external_dependency_version.yaml"
-            ext_dep_schema_content = """
-entity_type: external_dependency_version
-schema_version: "1.0.0"
-extends: base_external
-
-description: "External dependency version"
-
-required_metadata:
-  ecosystem:
-    type: string
-    description: "Package ecosystem"
-
-optional_metadata: {}
-relationships: {}
-
-dgraph_type: ExternalDependencyVersion
-"""
-            ext_dep_schema_path.write_text(ext_dep_schema_content)
-
-            # Write base external schema
-            base_external_path = schema_dir / "base_external.yaml"
+            # Write base_external schema
+            base_external_dir = base_dir / "base_external"
+            base_external_dir.mkdir()
+            base_external_path = base_external_dir / "1.0.0.yaml"
             base_external_content = """
 schema_type: base_external
 schema_version: "1.0.0"
@@ -196,8 +191,33 @@ allow_custom_fields: false
 """
             base_external_path.write_text(base_external_content)
 
+            # Write external dependency version schema (referenced in relationship)
+            ext_dep_dir = schema_dir / "external_dependency_version"
+            ext_dep_dir.mkdir()
+            ext_dep_schema_path = ext_dep_dir / "1.0.0.yaml"
+            ext_dep_schema_content = """
+entity_type: external_dependency_version
+schema_version: "1.0.0"
+extends: base_external
+
+description: "External dependency version"
+
+required_metadata:
+  ecosystem:
+    type: string
+    description: "Package ecosystem"
+
+optional_metadata: {}
+relationships: {}
+
+dgraph_type: ExternalDependencyVersion
+"""
+            ext_dep_schema_path.write_text(ext_dep_schema_content)
+
             # Write non-conflicting schema
-            entity_schema_path = schema_dir / "test_entity.yaml"
+            entity_dir = schema_dir / "test_entity"
+            entity_dir.mkdir()
+            entity_schema_path = entity_dir / "1.0.0.yaml"
             entity_schema_path.write_text(schema_without_conflict)
 
             # Create schema loader
@@ -260,12 +280,18 @@ relationships:
 dgraph_type: TestEntity
 """
 
-        # Create temporary schema directory
+        # Create temporary schema directory with new subdirectory structure
         with tempfile.TemporaryDirectory() as temp_dir:
             schema_dir = Path(temp_dir)
 
-            # Write base schema
-            base_schema_path = schema_dir / "base_internal.yaml"
+            # Create _base directory structure
+            base_dir = schema_dir / "_base"
+            base_dir.mkdir()
+
+            # Write base_internal schema
+            base_internal_dir = base_dir / "base_internal"
+            base_internal_dir.mkdir()
+            base_schema_path = base_internal_dir / "1.0.0.yaml"
             base_schema_content = """
 schema_type: base_internal
 schema_version: "1.0.0"
@@ -287,28 +313,10 @@ allow_custom_fields: false
 """
             base_schema_path.write_text(base_schema_content)
 
-            # Write external dependency version schema
-            ext_dep_schema_path = schema_dir / "external_dependency_version.yaml"
-            ext_dep_schema_content = """
-entity_type: external_dependency_version
-schema_version: "1.0.0"
-extends: base_external
-
-description: "External dependency version"
-
-required_metadata:
-  ecosystem:
-    type: string
-
-optional_metadata: {}
-relationships: {}
-
-dgraph_type: ExternalDependencyVersion
-"""
-            ext_dep_schema_path.write_text(ext_dep_schema_content)
-
-            # Write base external schema
-            base_external_path = schema_dir / "base_external.yaml"
+            # Write base_external schema
+            base_external_dir = base_dir / "base_external"
+            base_external_dir.mkdir()
+            base_external_path = base_external_dir / "1.0.0.yaml"
             base_external_content = """
 schema_type: base_external
 schema_version: "1.0.0"
@@ -328,8 +336,32 @@ allow_custom_fields: false
 """
             base_external_path.write_text(base_external_content)
 
+            # Write external dependency version schema
+            ext_dep_dir = schema_dir / "external_dependency_version"
+            ext_dep_dir.mkdir()
+            ext_dep_schema_path = ext_dep_dir / "1.0.0.yaml"
+            ext_dep_schema_content = """
+entity_type: external_dependency_version
+schema_version: "1.0.0"
+extends: base_external
+
+description: "External dependency version"
+
+required_metadata:
+  ecosystem:
+    type: string
+
+optional_metadata: {}
+relationships: {}
+
+dgraph_type: ExternalDependencyVersion
+"""
+            ext_dep_schema_path.write_text(ext_dep_schema_content)
+
             # Write schema with multiple conflicts
-            entity_schema_path = schema_dir / "test_entity.yaml"
+            entity_dir = schema_dir / "test_entity"
+            entity_dir.mkdir()
+            entity_schema_path = entity_dir / "1.0.0.yaml"
             entity_schema_path.write_text(schema_with_multiple_conflicts)
 
             # Create schema loader
@@ -426,7 +458,10 @@ dgraph_type: TestEntity
         with tempfile.TemporaryDirectory() as temp_dir:
             schema_dir = Path(temp_dir)
 
-            entity_schema_path = schema_dir / "test_entity.yaml"
+            # Write schema in subdirectory
+            entity_dir = schema_dir / "test_entity"
+            entity_dir.mkdir()
+            entity_schema_path = entity_dir / "1.0.0.yaml"
             entity_schema_path.write_text(schema_with_missing_base)
 
             loader = FileSchemaLoader(str(schema_dir))

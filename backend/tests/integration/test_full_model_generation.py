@@ -20,11 +20,18 @@ class TestFullModelGeneration:
 
     @pytest.fixture
     def schema_dir(self):
-        """Create temporary directory with real schema files."""
+        """Create temporary directory with real schema files in new subdirectory structure."""
         with tempfile.TemporaryDirectory() as temp_dir:
             schema_path = Path(temp_dir)
 
-            # Create base_internal.yaml
+            # Create _base directory structure
+            base_dir = schema_path / "_base"
+            base_dir.mkdir()
+
+            # Create base_internal/1.0.0.yaml
+            base_internal_dir = base_dir / "base_internal"
+            base_internal_dir.mkdir()
+
             base_internal_content = {
                 "schema_type": "base_internal",
                 "schema_version": "1.0.0",
@@ -57,10 +64,13 @@ class TestFullModelGeneration:
                 "allow_custom_fields": False,
             }
 
-            with open(schema_path / "base_internal.yaml", "w") as f:
+            with (base_internal_dir / "1.0.0.yaml").open("w") as f:
                 yaml.dump(base_internal_content, f)
 
-            # Create repository.yaml
+            # Create repository/1.0.0.yaml
+            repository_dir = schema_path / "repository"
+            repository_dir.mkdir()
+
             repository_content = {
                 "entity_type": "repository",
                 "schema_version": "1.0.0",
@@ -115,10 +125,13 @@ class TestFullModelGeneration:
                 },
             }
 
-            with open(schema_path / "repository.yaml", "w") as f:
+            with (repository_dir / "1.0.0.yaml").open("w") as f:
                 yaml.dump(repository_content, f)
 
-            # Create service.yaml
+            # Create service/1.0.0.yaml
+            service_dir = schema_path / "service"
+            service_dir.mkdir()
+
             service_content = {
                 "entity_type": "service",
                 "schema_version": "1.0.0",
@@ -169,7 +182,7 @@ class TestFullModelGeneration:
                 },
             }
 
-            with open(schema_path / "service.yaml", "w") as f:
+            with (service_dir / "1.0.0.yaml").open("w") as f:
                 yaml.dump(service_content, f)
 
             yield str(schema_path)
