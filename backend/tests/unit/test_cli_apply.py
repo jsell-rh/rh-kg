@@ -144,7 +144,6 @@ def mock_storage():
 def sample_valid_yaml():
     """Sample valid YAML content for testing."""
     return """
-schema_version: "1.0.0"
 namespace: "test-namespace"
 entity:
   repository:
@@ -158,7 +157,6 @@ entity:
 def sample_invalid_yaml():
     """Sample invalid YAML content for testing."""
     return """
-schema_version: "1.0.0"
 namespace: "test-namespace"
 entity:
   repository:
@@ -172,7 +170,6 @@ entity:
 def sample_complex_yaml():
     """Sample complex YAML with multiple entities and dependencies."""
     return """
-schema_version: "1.0.0"
 namespace: "test-namespace"
 entity:
   repository:

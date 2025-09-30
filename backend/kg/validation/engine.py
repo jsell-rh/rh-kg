@@ -238,5 +238,4 @@ class KnowledgeGraphValidator:
             "schema_count": len(self.entity_schemas),
             "strict_mode": self.strict_mode,
             "has_storage": self.storage is not None,
-            "supported_versions": SchemaStructureValidator.SUPPORTED_VERSIONS,
         }

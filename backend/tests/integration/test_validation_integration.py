@@ -33,7 +33,6 @@ class TestValidationIntegration:
         validator = KnowledgeGraphValidator(loaded_schemas)
 
         valid_yaml = """
-        schema_version: "1.0.0"
         namespace: "red-hat-insights"
         entity:
           repository:
@@ -73,7 +72,6 @@ class TestValidationIntegration:
         validator = KnowledgeGraphValidator(loaded_schemas)
 
         invalid_yaml = """
-        schema_version: "2.0.0"  # Unsupported version
         namespace: "Invalid_Namespace"  # Invalid format - capitals not allowed
         entity:
           repository:
@@ -99,13 +97,13 @@ class TestValidationIntegration:
             if error.help:
                 print(f"    Help: {error.help}")
 
-        # Should have multiple errors but early exit on unsupported version
+        # Should have multiple validation errors
         assert result.is_valid is False
         assert result.error_count > 0
 
-        # Check that we get the expected critical error
+        # Check that we get validation errors
         error_types = [error.type for error in result.errors]
-        assert "unsupported_schema_version" in error_types
+        assert "invalid_namespace_format" in error_types
 
     @pytest.mark.asyncio
     async def test_yaml_syntax_error(self, loaded_schemas):
@@ -113,7 +111,6 @@ class TestValidationIntegration:
         validator = KnowledgeGraphValidator(loaded_schemas)
 
         invalid_yaml = """
-        schema_version: "1.0.0"
         namespace: "test"
         entity:
           repository:
@@ -148,7 +145,6 @@ class TestValidationIntegration:
         validator = KnowledgeGraphValidator(loaded_schemas)
 
         yaml_with_dependencies = """
-        schema_version: "1.0.0"
         namespace: "test-project"
         entity:
           repository:
@@ -191,7 +187,6 @@ class TestValidationIntegration:
         validator = KnowledgeGraphValidator(loaded_schemas)
 
         simple_yaml = """
-        schema_version: "1.0.0"
         namespace: "simple-test"
         entity:
           repository:
@@ -222,13 +217,11 @@ class TestValidationIntegration:
         print(f"Schema Count: {info['schema_count']}")
         print(f"Strict Mode: {info['strict_mode']}")
         print(f"Has Storage: {info['has_storage']}")
-        print(f"Supported Versions: {info['supported_versions']}")
 
         assert "repository" in info["entity_schemas"]
         assert info["schema_count"] > 0
         assert info["strict_mode"] is True
         assert info["has_storage"] is False
-        assert "1.0.0" in info["supported_versions"]
 
 
 class TestErrorMessageQuality:
@@ -246,8 +239,7 @@ class TestErrorMessageQuality:
     async def test_helpful_error_messages(self, validator):
         """Test that error messages provide helpful guidance."""
         yaml_with_errors = """
-        schema_version: "2.0.0"
-        namespace: "test"
+        namespace: "Invalid_Namespace"
         entity: {}
         """
 
@@ -257,19 +249,16 @@ class TestErrorMessageQuality:
         error = result.errors[0]
 
         # Error message should be specific
-        assert "2.0.0" in error.message
-        assert error.field == "schema_version"
-        assert error.type == "unsupported_schema_version"
+        assert error.field == "namespace"
+        assert error.type == "invalid_namespace_format"
 
         # Help text should be actionable
         assert error.help is not None
-        assert "1.0.0" in error.help
 
     @pytest.mark.asyncio
     async def test_error_context_information(self, validator):
         """Test that errors include proper context information."""
         yaml_with_context_error = """
-        schema_version: "1.0.0"
         namespace: "test"
         entity:
           unknown_type:
@@ -313,7 +302,6 @@ def demonstrate_validation_engine():
         print("-" * 30)
 
         valid_yaml = """
-schema_version: "1.0.0"
 namespace: "demo-project"
 entity:
   repository:
@@ -339,7 +327,6 @@ entity:
         print("-" * 30)
 
         invalid_yaml = """
-schema_version: "2.0.0"
 namespace: "Invalid_Name"
 entity:
   repository:
@@ -365,7 +352,6 @@ entity:
         print("-" * 30)
 
         syntax_error_yaml = """
-schema_version: "1.0.0"
 namespace: "test"
 entity:
   repository:

@@ -191,7 +191,6 @@ class TestFullModelGeneration:
     def valid_yaml_data(self):
         """Create valid YAML data for testing."""
         return {
-            "schema_version": "1.0.0",
             "namespace": "rosa-hcp",
             "entity": {
                 "repository": [
@@ -231,7 +230,6 @@ class TestFullModelGeneration:
     def invalid_yaml_data(self):
         """Create invalid YAML data for testing."""
         return {
-            "schema_version": "1.0.0",
             "namespace": "rosa-hcp",
             "entity": {
                 "repository": [
@@ -298,7 +296,6 @@ class TestFullModelGeneration:
 
         # Check root model structure
         root_fields = KnowledgeGraphModel.model_fields
-        assert "schema_version" in root_fields
         assert "namespace" in root_fields
         assert "entity" in root_fields
 
@@ -315,7 +312,6 @@ class TestFullModelGeneration:
         instance = KnowledgeGraphModel.model_validate(valid_yaml_data)
 
         # Verify the data was parsed correctly
-        assert instance.schema_version == "1.0.0"
         assert instance.namespace == "rosa-hcp"
         assert instance.entity is not None
 
@@ -478,22 +474,10 @@ class TestFullModelGeneration:
 
         KnowledgeGraphModel = models["_root"]
 
-        # Test schema version validation
-        with pytest.raises(ValidationError) as exc_info:
-            KnowledgeGraphModel.model_validate(
-                {
-                    "schema_version": "invalid-version",
-                    "namespace": "test",
-                    "entity": {},
-                }
-            )
-        assert "String should match pattern" in str(exc_info.value)
-
         # Test namespace validation
         with pytest.raises(ValidationError) as exc_info:
             KnowledgeGraphModel.model_validate(
                 {
-                    "schema_version": "1.0.0",
                     "namespace": "Invalid-Namespace",
                     "entity": {},
                 }
@@ -504,7 +488,6 @@ class TestFullModelGeneration:
         with pytest.raises(ValidationError) as exc_info:
             KnowledgeGraphModel.model_validate(
                 {
-                    "schema_version": "1.0.0",
                     "namespace": "test",
                     "entity": {"unknown_entity_type": [{"test": {"name": "test"}}]},
                 }

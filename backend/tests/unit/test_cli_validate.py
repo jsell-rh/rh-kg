@@ -32,7 +32,6 @@ def temp_dir():
 def valid_yaml_content():
     """Valid YAML content for testing."""
     return """
-schema_version: "1.0.0"
 namespace: "test-project"
 entity:
   repository:
@@ -48,7 +47,6 @@ entity:
 def invalid_yaml_content():
     """Invalid YAML content for testing."""
     return """
-schema_version: "2.0.0"  # Unsupported version
 namespace: "test-project"
 entity:
   repository:
@@ -90,18 +88,6 @@ class TestCLIArgumentParsing:
 
         result = runner.invoke(validate_command, [str(test_file)])
         assert result.exit_code in [0, 1]  # Should parse and validate
-
-    def test_validate_with_schema_version_option(
-        self, runner, temp_dir, valid_yaml_content
-    ):
-        """Test --schema-version option."""
-        test_file = temp_dir / "test.yaml"
-        test_file.write_text(valid_yaml_content)
-
-        result = runner.invoke(
-            validate_command, [str(test_file), "--schema-version", "1.0.0"]
-        )
-        assert result.exit_code in [0, 1]
 
     def test_validate_with_strict_option(self, runner, temp_dir, valid_yaml_content):
         """Test --strict option."""
@@ -182,7 +168,6 @@ class TestCLIOutputFormats:
         assert result.exit_code == 0
         assert "✅" in result.output
         assert "Validation successful" in result.output
-        assert "Schema version:" in result.output
         assert "Namespace:" in result.output
 
     def test_compact_format_success(self, runner, temp_dir, valid_yaml_content):
@@ -196,7 +181,6 @@ class TestCLIOutputFormats:
         assert result.exit_code == 0
         assert "✅" in result.output
         assert "VALID" in result.output
-        assert "schema=" in result.output
 
     def test_json_format_success(self, runner, temp_dir, valid_yaml_content):
         """Test JSON format for successful validation."""
@@ -210,7 +194,6 @@ class TestCLIOutputFormats:
         output_json = json.loads(result.output)
         assert output_json["status"] == "valid"
         assert "file" in output_json
-        assert "schema_version" in output_json
         assert "namespace" in output_json
 
     def test_table_format_failure(self, runner, temp_dir, invalid_yaml_content):
@@ -283,7 +266,6 @@ class TestCLIErrorMessages:
     def test_yaml_syntax_error_shows_line_numbers(self, runner, temp_dir):
         """Test YAML syntax errors show line numbers."""
         invalid_yaml = """
-schema_version: "1.0.0"
 namespace: "test"
 entity:
   repository:
@@ -301,7 +283,6 @@ entity:
     def test_validation_errors_show_helpful_context(self, runner, temp_dir):
         """Test validation errors include helpful context and suggestions."""
         invalid_yaml = """
-schema_version: "1.0.0"
 namespace: "test"
 entity:
   repository:
@@ -327,7 +308,6 @@ class TestCLIIntegrationWithValidationEngine:
         """Test CLI loads and uses real schemas from spec directory."""
         # Create a YAML file with real repository structure
         yaml_content = """
-schema_version: "1.0.0"
 namespace: "test-project"
 entity:
   repository:
@@ -346,7 +326,6 @@ entity:
         """Test CLI validates repository fields according to schemas."""
         # Missing required field
         yaml_content = """
-schema_version: "1.0.0"
 namespace: "test-project"
 entity:
   repository:

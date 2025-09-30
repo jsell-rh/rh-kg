@@ -217,9 +217,6 @@ class DynamicModelFactory:
 
         # Create validators for the root model
         root_validators = {
-            "validate_schema_version": field_validator("schema_version")(
-                self._validate_schema_version
-            ),
             "validate_namespace": field_validator("namespace")(
                 self._validate_namespace
             ),
@@ -235,13 +232,6 @@ class DynamicModelFactory:
 
         KnowledgeGraphFile = create_model(
             "KnowledgeGraphFile",
-            schema_version=(
-                str,
-                Field(
-                    description="Schema version in semver format",
-                    pattern=r"^\d+\.\d+\.\d+$",
-                ),
-            ),
             namespace=(
                 str,
                 Field(
@@ -433,15 +423,6 @@ class DynamicModelFactory:
                 )(self._validate_generic_references)
 
         return validators
-
-    @staticmethod
-    def _validate_schema_version(v: str) -> str:
-        """Validate schema version format."""
-        import re
-
-        if not re.match(r"^\d+\.\d+\.\d+$", v):
-            raise ValueError('Schema version must be in semver format (e.g., "1.0.0")')
-        return v
 
     @staticmethod
     def _validate_namespace(v: str) -> str:

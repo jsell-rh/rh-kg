@@ -22,7 +22,6 @@ class TestApplyRealIssues:
         from click.testing import CliRunner
 
         yaml_content = """
-schema_version: "1.0.0"
 namespace: "test-namespace"
 entity:
   repository:
@@ -60,7 +59,6 @@ entity:
         from click.testing import CliRunner
 
         yaml_content = """
-schema_version: "1.0.0"
 namespace: "test-namespace"
 entity:
   repository:

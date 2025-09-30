@@ -175,7 +175,6 @@ Summary:
 {
   "status": "valid",
   "file": "knowledge-graph.yaml",
-  "schema_version": "1.0.0",
   "namespace": "rosa-hcp",
   "summary": {
     "repositories": 3,
@@ -199,7 +198,6 @@ Summary:
 {
   "status": "valid",
   "file": "knowledge-graph.yaml",
-  "schema_version": "1.0.0",
   "namespace": "rosa-hcp",
   "summary": {
     "repositories": 2,
@@ -373,10 +371,9 @@ Run 'kg validate --help' for more information.
 ### Schema Validation
 
 1. **Parse YAML:** Validate YAML syntax is correct
-2. **Schema version:** Verify schema_version field format and support
-3. **Structure validation:** Ensure all required top-level fields present
-4. **Entity validation:** Validate each entity against its schema
-5. **Reference validation:** Check all dependency references are well-formed
+2. **Structure validation:** Ensure all required top-level fields present
+3. **Entity validation:** Validate each entity against its schema
+4. **Reference validation:** Check all dependency references are well-formed
 
 ### Error Collection
 
@@ -404,24 +401,6 @@ Type: unknown_field
 Message: Unknown field '{field}' in {entity_type} '{entity_name}'
 Help: Phase 1 schema only supports specific fields. Custom fields will be supported in Phase 2.
 Context: Allowed fields: {allowed_fields}
-```
-
-#### Invalid Schema Version
-
-```
-Type: invalid_schema_version
-Message: Invalid schema version '{version}'
-Help: Must follow semantic versioning (MAJOR.MINOR.PATCH)
-Example: "1.0.0"
-```
-
-#### Unsupported Schema Version
-
-```
-Type: unsupported_schema_version
-Message: Unsupported schema version '{version}'
-Help: This validator supports versions: {supported_versions}
-Context: Latest supported: {latest_version}
 ```
 
 ### Required Field Errors

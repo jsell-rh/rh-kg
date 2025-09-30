@@ -120,7 +120,7 @@ class TestSchemaStructureValidator:
     def test_valid_structure(self):
         """Test validation of valid schema structure."""
         validator = SchemaStructureValidator()
-        data = {"schema_version": "1.0.0", "namespace": "test-namespace", "entity": {}}
+        data = {"namespace": "test-namespace", "entity": {}}
 
         errors = validator.validate(data)
         assert len(errors) == 0
@@ -129,7 +129,6 @@ class TestSchemaStructureValidator:
         """Test validation with missing required fields."""
         validator = SchemaStructureValidator()
         data = {
-            "schema_version": "1.0.0"
             # Missing namespace and entity
         }
 
@@ -145,25 +144,10 @@ class TestSchemaStructureValidator:
         assert "namespace" in missing_fields
         assert "entity" in missing_fields
 
-    def test_unsupported_schema_version(self):
-        """Test validation with unsupported schema version."""
-        validator = SchemaStructureValidator()
-        data = {
-            "schema_version": "2.0.0",  # Unsupported
-            "namespace": "test",
-            "entity": {},
-        }
-
-        errors = validator.validate(data)
-        assert len(errors) == 1
-        assert errors[0].type == "unsupported_schema_version"
-        assert "2.0.0" in errors[0].message
-
     def test_invalid_namespace_format(self):
         """Test validation with invalid namespace format."""
         validator = SchemaStructureValidator()
         data = {
-            "schema_version": "1.0.0",
             "namespace": "Invalid-Namespace",  # Capital letters not allowed
             "entity": {},
         }
@@ -176,16 +160,15 @@ class TestSchemaStructureValidator:
         """Test validation with invalid field types."""
         validator = SchemaStructureValidator()
         data = {
-            "schema_version": 1.0,  # Should be string
             "namespace": 123,  # Should be string
             "entity": [],  # Should be dict
         }
 
         errors = validator.validate(data)
-        assert len(errors) == 3
+        assert len(errors) == 2
 
         error_types = [error.type for error in errors]
-        assert error_types.count("invalid_field_type") == 3
+        assert error_types.count("invalid_field_type") == 2
 
 
 class TestFieldFormatValidator:
@@ -204,7 +187,6 @@ class TestFieldFormatValidator:
         """Test validation with unknown entity type."""
         validator = FieldFormatValidator(sample_schemas)
         data = {
-            "schema_version": "1.0.0",
             "namespace": "test",
             "entity": {
                 "unknown_type": []  # Not in schemas
@@ -222,7 +204,6 @@ class TestFieldFormatValidator:
         """Test validation with invalid entity structure."""
         validator = FieldFormatValidator(sample_schemas)
         data = {
-            "schema_version": "1.0.0",
             "namespace": "test",
             "entity": {
                 "repository": "not_a_list"  # Should be list
@@ -384,7 +365,6 @@ class TestKnowledgeGraphValidator:
         validator = KnowledgeGraphValidator(sample_schemas)
 
         yaml_content = """
-        schema_version: "1.0.0"
         namespace: "test"
         entity:
           repository:
@@ -405,8 +385,8 @@ class TestKnowledgeGraphValidator:
         validator = KnowledgeGraphValidator(sample_schemas)
 
         yaml_content = """
-        schema_version: "unclosed quote
-        namespace: test
+        namespace: "unclosed quote
+        entity: {}
         """
 
         result = await validator.validate(yaml_content)
@@ -422,8 +402,8 @@ class TestKnowledgeGraphValidator:
         validator = KnowledgeGraphValidator(sample_schemas)
 
         yaml_content = """
-        schema_version: "1.0.0"
-        # Missing namespace and entity
+        entity:
+          repository: []
         """
 
         result = await validator.validate(yaml_content)
@@ -432,29 +412,11 @@ class TestKnowledgeGraphValidator:
         assert any(e.type == "missing_required_field" for e in result.errors)
         assert result.model is None
 
-    @pytest.mark.asyncio
-    async def test_unsupported_version_early_exit(self, sample_schemas):
-        """Test early exit on unsupported schema version."""
-        validator = KnowledgeGraphValidator(sample_schemas)
-
-        yaml_content = """
-        schema_version: "2.0.0"
-        namespace: "test"
-        entity: {}
-        """
-
-        result = await validator.validate(yaml_content)
-
-        assert result.is_valid is False
-        assert any(e.type == "unsupported_schema_version" for e in result.errors)
-        assert result.model is None
-
     def test_synchronous_validation(self, sample_schemas):
         """Test synchronous validation method."""
         validator = KnowledgeGraphValidator(sample_schemas)
 
         yaml_content = """
-        schema_version: "1.0.0"
         namespace: "test"
         entity:
           repository: []
@@ -497,7 +459,6 @@ class TestIntegrationScenarios:
         validator = KnowledgeGraphValidator(complete_schemas)
 
         yaml_content = """
-        schema_version: "1.0.0"
         namespace: "red-hat-insights"
         entity:
           repository:
@@ -521,7 +482,6 @@ class TestIntegrationScenarios:
         validator = KnowledgeGraphValidator(complete_schemas)
 
         yaml_content = """
-        schema_version: "1.5.0"  # Unsupported version
         namespace: "Invalid_Namespace"  # Invalid format
         entity:
           repository:
@@ -537,8 +497,8 @@ class TestIntegrationScenarios:
         assert result.is_valid is False
         assert len(result.errors) > 0
 
-        # Should have early exit on unsupported version
-        assert any(e.type == "unsupported_schema_version" for e in result.errors)
+        # Should have multiple validation errors
+        assert any(e.type == "invalid_namespace_format" for e in result.errors)
 
     @pytest.mark.asyncio
     async def test_error_message_quality(self, complete_schemas):
@@ -546,8 +506,7 @@ class TestIntegrationScenarios:
         validator = KnowledgeGraphValidator(complete_schemas)
 
         yaml_content = """
-        schema_version: "2.0.0"
-        namespace: "test"
+        namespace: "Invalid_Namespace"
         entity: {}
         """
 
@@ -557,7 +516,5 @@ class TestIntegrationScenarios:
         error = result.errors[0]
 
         # Error should have helpful information
-        assert error.type == "unsupported_schema_version"
-        assert "2.0.0" in error.message
+        assert error.type == "invalid_namespace_format"
         assert error.help is not None
-        assert "1.0.0" in error.help  # Should mention supported version

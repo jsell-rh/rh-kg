@@ -1,7 +1,18 @@
-schema_version: "1.0.0"
+# yaml-language-server: $schema=.vscode/kg-schema.json
 namespace: "test-namespace"
 entity:
   repository:
+    - foo:
+        git_repo_url: "http://"
+        owners:
+          - "foo"
+
     - test-repo:
-        owners: ["test@example.com"]
+        owners: ["test@example.com", "newowner@gmail.com"]
         git_repo_url: "https://github.com/test/repo"
+
+        depends_on:
+          - "external://pypi/foobar/3.39.0"
+          - "external://pypi/fastapi/1.39.0"
+        internal_depends_on:
+          - internal://rosa-hcp/rosa-operator

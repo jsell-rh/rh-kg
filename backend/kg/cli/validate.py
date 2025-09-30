@@ -67,7 +67,6 @@ def _output_table_format(  # noqa: PLR0912, PLR0915
     parse_time_ms: float,
     file_size: int,
     dependency_count: int,
-    schema_version: str | None,
     namespace: str | None,
     force_colors: bool = False,
 ) -> None:
@@ -81,10 +80,6 @@ def _output_table_format(  # noqa: PLR0912, PLR0915
             # Create info table for better readability
             info_table = Table(show_header=False, box=None, padding=(0, 1))
             info_table.add_row("[bold]File:[/bold]", f"[cyan]{file_path}[/cyan]")
-            info_table.add_row(
-                "[bold]Schema version:[/bold]",
-                f"[yellow]{schema_version or 'Unknown'}[/yellow]",
-            )
             info_table.add_row(
                 "[bold]Namespace:[/bold]",
                 f"[magenta]{namespace or 'Unknown'}[/magenta]",
@@ -108,7 +103,6 @@ def _output_table_format(  # noqa: PLR0912, PLR0915
             click.echo("✅ Validation successful")
             click.echo()
             click.echo(f"File: {file_path}")
-            click.echo(f"Schema version: {schema_version or 'Unknown'}")
             click.echo(f"Namespace: {namespace or 'Unknown'}")
             if verbose:
                 click.echo(f"File size: {_format_file_size(file_size)}")
@@ -200,7 +194,6 @@ def _output_compact_format(  # noqa: PLR0912
     parse_time_ms: float,
     file_size: int,
     dependency_count: int,
-    schema_version: str | None,
     namespace: str | None,
     force_colors: bool = False,
 ) -> None:
@@ -211,7 +204,6 @@ def _output_compact_format(  # noqa: PLR0912
             parts = [
                 "[bold green]✅ VALID[/bold green]",
                 f"[bold]file[/bold]=[cyan]{file_path}[/cyan]",
-                f"[bold]schema[/bold]=[yellow]{schema_version or 'unknown'}[/yellow]",
                 f"[bold]namespace[/bold]=[magenta]{namespace or 'unknown'}[/magenta]",
             ]
 
@@ -230,7 +222,6 @@ def _output_compact_format(  # noqa: PLR0912
             status_parts = [
                 "✅ VALID",
                 f"file={file_path}",
-                f"schema={schema_version or 'unknown'}",
                 f"namespace={namespace or 'unknown'}",
             ]
 
@@ -299,14 +290,12 @@ def _output_json_format(
     parse_time_ms: float,
     file_size: int,
     dependency_count: int,
-    schema_version: str | None,
     namespace: str | None,
 ) -> None:
     """Output validation result in JSON format."""
     output: dict[str, Any] = {
         "status": "valid" if result.is_valid else "invalid",
         "file": file_path,
-        "schema_version": schema_version,
         "namespace": namespace,
     }
 
@@ -349,14 +338,12 @@ def _output_yaml_format(
     parse_time_ms: float,
     file_size: int,
     dependency_count: int,
-    schema_version: str | None,
     namespace: str | None,
 ) -> None:
     """Output validation result in YAML format."""
     output: dict[str, Any] = {
         "status": "valid" if result.is_valid else "invalid",
         "file": file_path,
-        "schema_version": schema_version,
         "namespace": namespace,
     }
 
@@ -394,7 +381,6 @@ def _output_yaml_format(
 
 def _validate_implementation(  # noqa: PLR0912, PLR0915
     file: str,
-    schema_version: str | None,
     strict: bool,
     format: str,
     verbose: bool,
@@ -514,29 +500,8 @@ def _validate_implementation(  # noqa: PLR0912, PLR0915
         parse_time_ms = (time.time() - start_time) * 1000
         dependency_count = _count_dependencies(parsed_data)
 
-        # Extract schema info from parsed data
-        schema_version_actual = (
-            parsed_data.get("schema_version") if parsed_data else None
-        )
+        # Extract namespace from parsed data
         namespace_actual = parsed_data.get("namespace") if parsed_data else None
-
-        # Validate expected schema version if provided
-        if schema_version and schema_version_actual != schema_version:
-            if format == "json":
-                version_error_output: dict[str, Any] = {
-                    "status": "invalid",
-                    "error_type": "schema_version_mismatch",
-                    "message": f"Expected schema version '{schema_version}', got '{schema_version_actual}'",
-                    "file": str(file_path),
-                    "expected_version": schema_version,
-                    "actual_version": schema_version_actual,
-                }
-                click.echo(json.dumps(version_error_output, indent=2))
-            else:
-                click.echo(
-                    f"❌ Schema version mismatch: expected '{schema_version}', got '{schema_version_actual}'"
-                )
-            sys.exit(1)
 
         # Apply strict mode (convert warnings to errors)
         final_result = result
@@ -568,7 +533,6 @@ def _validate_implementation(  # noqa: PLR0912, PLR0915
                 parse_time_ms,
                 file_size,
                 dependency_count,
-                schema_version_actual,
                 namespace_actual,
                 force_colors,
             )
@@ -580,7 +544,6 @@ def _validate_implementation(  # noqa: PLR0912, PLR0915
                 parse_time_ms,
                 file_size,
                 dependency_count,
-                schema_version_actual,
                 namespace_actual,
                 force_colors,
             )
@@ -592,7 +555,6 @@ def _validate_implementation(  # noqa: PLR0912, PLR0915
                 parse_time_ms,
                 file_size,
                 dependency_count,
-                schema_version_actual,
                 namespace_actual,
             )
         elif format == "yaml":
@@ -603,7 +565,6 @@ def _validate_implementation(  # noqa: PLR0912, PLR0915
                 parse_time_ms,
                 file_size,
                 dependency_count,
-                schema_version_actual,
                 namespace_actual,
             )
 
@@ -649,12 +610,6 @@ def _validate_implementation(  # noqa: PLR0912, PLR0915
     help="**Path to YAML file to validate** (default: knowledge-graph.yaml)",
 )
 @click.option(
-    "--schema-version",
-    type=str,
-    help="🔢 **Expected schema version** to validate against",
-    metavar="VERSION",
-)
-@click.option(
     "--strict",
     is_flag=True,
     help="⚡ **Enable strict mode** - warnings become errors",
@@ -680,7 +635,6 @@ def _validate_implementation(  # noqa: PLR0912, PLR0915
 )
 def validate_command(
     file: str,
-    schema_version: str | None,
     strict: bool,
     format: str,
     verbose: bool,
@@ -707,6 +661,4 @@ def validate_command(
     - `2`: File not found, not readable, or invalid command line arguments 📁⚠️
     - `4`: Internal error 💥
     """
-    _validate_implementation(
-        file, schema_version, strict, format, verbose, force_colors
-    )
+    _validate_implementation(file, strict, format, verbose, force_colors)

@@ -75,10 +75,9 @@ class YamlSyntaxValidator:
 
 
 class SchemaStructureValidator:
-    """Validates schema structure and version (Layer 2)."""
+    """Validates schema structure (Layer 2)."""
 
-    SUPPORTED_VERSIONS: ClassVar[list[str]] = ["1.0.0"]
-    REQUIRED_FIELDS: ClassVar[list[str]] = ["schema_version", "namespace", "entity"]
+    REQUIRED_FIELDS: ClassVar[list[str]] = ["namespace", "entity"]
 
     def validate(self, data: dict[str, Any]) -> list[ValidationError]:
         """Validate schema structure.
@@ -100,28 +99,6 @@ class SchemaStructureValidator:
                         field=field,
                         message=f"Missing required top-level field '{field}'",
                         help=f"All knowledge graph files must include '{field}'",
-                    )
-                )
-
-        # Validate schema version
-        if "schema_version" in data:
-            version = data["schema_version"]
-            if not isinstance(version, str):
-                errors.append(
-                    ValidationError(
-                        type="invalid_field_type",
-                        field="schema_version",
-                        message="Schema version must be a string",
-                        help='Example: schema_version: "1.0.0"',
-                    )
-                )
-            elif version not in self.SUPPORTED_VERSIONS:
-                errors.append(
-                    ValidationError(
-                        type="unsupported_schema_version",
-                        field="schema_version",
-                        message=f"Unsupported schema version '{version}'",
-                        help=f"Supported versions: {', '.join(self.SUPPORTED_VERSIONS)}",
                     )
                 )
 

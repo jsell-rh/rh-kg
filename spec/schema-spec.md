@@ -12,7 +12,6 @@ The schema follows a rigid approach for Phase 1 MVP, with planned evolution poin
 A knowledge graph YAML file MUST have this exact structure:
 
 ```yaml
-schema_version: "1.0.0"
 namespace: <namespace-name>
 entity:
   repository:
@@ -24,25 +23,6 @@ entity:
 ```
 
 ### Global Fields
-
-#### schema_version (REQUIRED)
-
-- **Type:** String
-- **Format:** Semantic version (MAJOR.MINOR.PATCH)
-- **Pattern:** `^\d+\.\d+\.\d+$`
-- **Current value:** `"1.0.0"`
-
-**Examples:**
-
-```yaml
-# Valid
-schema_version: "1.0.0"
-
-# Invalid
-schema_version: "1.0"      # Missing patch version
-schema_version: "v1.0.0"   # Unexpected prefix
-schema_version: 1.0.0      # Must be string
-```
 
 #### namespace (REQUIRED)
 
@@ -294,7 +274,6 @@ internal://<namespace>/<entity-name>
 ## Complete Example
 
 ```yaml
-schema_version: "1.0.0"
 namespace: "rosa-hcp"
 
 entity:

@@ -65,7 +65,6 @@ def mock_storage_for_upsert():
 def sample_yaml_with_deps():
     """Sample YAML with external dependencies."""
     return """
-schema_version: "1.0.0"
 namespace: "test-ns"
 entity:
   repository:
@@ -181,7 +180,6 @@ class TestApplyUpsertBehavior:
 
         # First YAML with initial metadata
         yaml_v1 = """
-schema_version: "1.0.0"
 namespace: "test-ns"
 entity:
   repository:
@@ -192,7 +190,6 @@ entity:
 
         # Second YAML with updated metadata
         yaml_v2 = """
-schema_version: "1.0.0"
 namespace: "test-ns"
 entity:
   repository:

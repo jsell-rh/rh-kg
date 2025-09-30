@@ -356,46 +356,16 @@ class TestDynamicModelFactory:
         assert root_model.__name__ == "KnowledgeGraphFile"
         fields = root_model.model_fields
 
-        assert "schema_version" in fields
         assert "namespace" in fields
         assert "entity" in fields
 
         # Test valid root data
         valid_data = {
-            "schema_version": "1.0.0",
             "namespace": "test-namespace",
             "entity": {"repository": [{"test-repo": {"name": "Test Repository"}}]},
         }
         instance = root_model.model_validate(valid_data)
-        assert instance.schema_version == "1.0.0"
         assert instance.namespace == "test-namespace"
-
-    def test_schema_version_validation(self, factory):
-        """Test schema version validation."""
-        schemas = {}
-        root_model = factory.create_root_model(schemas)
-
-        # Test valid schema version
-        valid_data = {
-            "schema_version": "1.0.0",
-            "namespace": "test",
-            "entity": {},
-        }
-        instance = root_model.model_validate(valid_data)
-        assert instance.schema_version == "1.0.0"
-
-        # Test invalid schema version formats
-        invalid_versions = ["1.0", "v1.0.0", "1.0.0.0", "1.0.0-alpha"]
-        for version in invalid_versions:
-            with pytest.raises(ValidationError) as exc_info:
-                root_model.model_validate(
-                    {
-                        "schema_version": version,
-                        "namespace": "test",
-                        "entity": {},
-                    }
-                )
-            assert "String should match pattern" in str(exc_info.value)
 
     def test_namespace_validation(self, factory):
         """Test namespace validation."""
@@ -406,7 +376,6 @@ class TestDynamicModelFactory:
         valid_namespaces = ["a", "test", "test-namespace", "test_namespace", "test123"]
         for namespace in valid_namespaces:
             data = {
-                "schema_version": "1.0.0",
                 "namespace": namespace,
                 "entity": {},
             }
@@ -426,7 +395,6 @@ class TestDynamicModelFactory:
             with pytest.raises(ValidationError) as exc_info:
                 root_model.model_validate(
                     {
-                        "schema_version": "1.0.0",
                         "namespace": namespace,
                         "entity": {},
                     }
@@ -500,7 +468,6 @@ class TestDynamicModelFactory:
         # Check root model can validate data
         root_model = models["_root"]
         valid_data = {
-            "schema_version": "1.0.0",
             "namespace": "test",
             "entity": {
                 "repository": [{"test-repo": {"name": "Test"}}],
@@ -508,7 +475,7 @@ class TestDynamicModelFactory:
             },
         }
         instance = root_model.model_validate(valid_data)
-        assert instance.schema_version == "1.0.0"
+        assert instance.namespace == "test"
 
     def test_strict_validation(self, factory, basic_schema):
         """Test that models reject unknown fields."""

@@ -53,7 +53,6 @@ X-Source-Commit: abc123def456
 #### Request Body
 
 ```yaml
-schema_version: "1.0.0"
 namespace: "rosa-hcp"
 entity:
   repository:
@@ -164,7 +163,6 @@ Same YAML format as submit endpoint.
   "status": "valid",
   "message": "Validation successful",
   "data": {
-    "schema_version": "1.0.0",
     "namespace": "rosa-hcp",
     "entities": {
       "repositories": 1
@@ -489,8 +487,6 @@ GET /api/v1/info
   "status": "success",
   "data": {
     "version": "1.0.0",
-    "schema_version": "1.0.0",
-    "supported_schema_versions": ["1.0.0"],
     "supported_ecosystems": ["pypi", "npm", "golang.org/x", "github.com"],
     "deployment": {
       "environment": "production",
@@ -615,7 +611,6 @@ Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...
 X-Source-Repo: github.com/openshift/rosa-hcp-service
 X-Source-Commit: abc123def456
 
-schema_version: "1.0.0"
 namespace: "rosa-hcp"
 entity:
   repository:

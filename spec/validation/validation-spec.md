@@ -83,13 +83,13 @@ class YamlSyntaxValidator:
 
 ```yaml
 # Invalid YAML - unclosed quote
-schema_version: "1.0.0
-namespace: test
+namespace: "test
+entity: {}
 
 # Error:
 # ValidationError: yaml_syntax_error
 # Message: Invalid YAML syntax: found unexpected end of stream
-# Line: 2, Column: 16
+# Line: 2, Column: 12
 # Help: Ensure the file contains valid YAML syntax
 ```
 
@@ -103,10 +103,9 @@ Validate top-level structure and schema version compatibility.
 
 ```python
 class SchemaStructureValidator:
-    """Validates schema structure and version."""
+    """Validates schema structure."""
 
-    SUPPORTED_VERSIONS = ["1.0.0"]
-    REQUIRED_FIELDS = ["schema_version", "namespace", "entity"]
+    REQUIRED_FIELDS = ["namespace", "entity"]
 
     def validate(self, data: dict[str, Any]) -> list[ValidationError]:
         """Validate schema structure."""
@@ -120,24 +119,6 @@ class SchemaStructureValidator:
                     field=field,
                     message=f"Missing required top-level field '{field}'",
                     help=f"All knowledge graph files must include '{field}'"
-                ))
-
-        # Validate schema version
-        if "schema_version" in data:
-            version = data["schema_version"]
-            if not isinstance(version, str):
-                errors.append(ValidationError(
-                    type="invalid_field_type",
-                    field="schema_version",
-                    message="Schema version must be a string",
-                    help="Example: schema_version: \"1.0.0\""
-                ))
-            elif version not in self.SUPPORTED_VERSIONS:
-                errors.append(ValidationError(
-                    type="unsupported_schema_version",
-                    field="schema_version",
-                    message=f"Unsupported schema version '{version}'",
-                    help=f"Supported versions: {', '.join(self.SUPPORTED_VERSIONS)}"
                 ))
 
         return errors
@@ -687,8 +668,7 @@ class KnowledgeGraphValidator:
         errors.extend(structure_errors)
 
         # If critical structure errors, stop here
-        if any(e.type in ["missing_required_field", "unsupported_schema_version"]
-               for e in structure_errors):
+        if any(e.type == "missing_required_field" for e in structure_errors):
             return ValidationResult(
                 is_valid=False,
                 errors=errors,
@@ -849,7 +829,6 @@ class TestValidationLayers:
         """Test field format validation."""
         # Valid data
         data = {
-            "schema_version": "1.0.0",
             "namespace": "test",
             "entity": {"repository": []}
         }
@@ -888,7 +867,6 @@ class TestValidationLayers:
 
         # Data using deprecated field
         data = {
-            "schema_version": "1.0.0",
             "namespace": "test",
             "entity": {
                 "repository": [{
@@ -919,7 +897,6 @@ class TestValidationIntegration:
     async def test_complete_validation_success(self):
         """Test successful validation of complete YAML."""
         yaml_content = """
-        schema_version: "1.0.0"
         namespace: "test"
         entity:
           repository:
@@ -940,7 +917,6 @@ class TestValidationIntegration:
     async def test_complete_validation_failure(self):
         """Test validation failure with multiple errors."""
         yaml_content = """
-        schema_version: "invalid"
         namespace: "test"
         entity:
           repository:
@@ -954,16 +930,14 @@ class TestValidationIntegration:
         result = await validator.validate(yaml_content)
 
         assert not result.is_valid
-        assert len(result.errors) > 1
+        assert len(result.errors) > 0
         error_types = [e.type for e in result.errors]
-        assert "unsupported_schema_version" in error_types
         assert "empty_required_array" in error_types
 
     async def test_validation_with_deprecation_warnings(self):
         """Test validation passes with deprecation warnings."""
         # YAML using deprecated field
         yaml_content = """
-        schema_version: "1.0.0"
         namespace: "test"
         entity:
           repository:
