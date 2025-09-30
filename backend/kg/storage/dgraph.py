@@ -622,7 +622,7 @@ class DgraphStorage(StorageInterface):
             # Find the UIDs for both entities
             source_query = f"""
             query {{
-                source(func: eq(id, "{source_entity_id}")) @filter(type({source_entity_type.title()})) {{
+                source(func: eq(id, "{source_entity_id}")) @filter(type({source_entity_type})) {{
                     uid
                 }}
             }}
@@ -630,7 +630,7 @@ class DgraphStorage(StorageInterface):
 
             target_query = f"""
             query {{
-                target(func: eq(id, "{target_entity_id}")) @filter(type({target_entity_type.title()})) {{
+                target(func: eq(id, "{target_entity_id}")) @filter(type({target_entity_type})) {{
                     uid
                 }}
             }}
@@ -692,7 +692,7 @@ class DgraphStorage(StorageInterface):
             # Find the source entity UID and all its relationships of the specified type
             query = f"""
             query {{
-                entity(func: eq(id, "{source_entity_id}")) @filter(type({source_entity_type.title()})) {{
+                entity(func: eq(id, "{source_entity_id}")) @filter(type({source_entity_type})) {{
                     uid
                     {relationship_type} {{
                         uid

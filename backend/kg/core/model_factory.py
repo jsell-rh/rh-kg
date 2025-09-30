@@ -148,7 +148,7 @@ class DynamicModelFactory:
         validators.update(self._create_field_validators(schema))
 
         # Create the model
-        model_name = f"{schema.entity_type.title()}Model"
+        model_name = f"{schema.entity_type}Model"
 
         # Create model with proper configuration
         class StrictBaseModel(BaseModel):

@@ -128,7 +128,7 @@ class TestDynamicModelFactory:
         model_class = factory.create_entity_model(basic_schema)
 
         # Check model name
-        assert model_class.__name__ == "Test_EntityModel"
+        assert model_class.__name__ == "test_entityModel"
 
         # Check fields exist
         fields = model_class.model_fields
@@ -151,7 +151,7 @@ class TestDynamicModelFactory:
         model_class = factory.create_entity_model(repository_schema)
 
         # Check model name
-        assert model_class.__name__ == "RepositoryModel"
+        assert model_class.__name__ == "repositoryModel"
 
         # Check fields
         fields = model_class.model_fields
