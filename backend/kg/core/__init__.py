@@ -19,6 +19,7 @@ from .logging import (
     get_logger,
 )
 from .model_factory import DynamicModelFactory
+from .relationship_types import RelationshipTypes, StandardRelationshipType
 from .schema import (
     EntitySchema,
     FieldDefinition,
@@ -41,6 +42,8 @@ __all__ = [
     "FieldDefinition",
     "FileSchemaLoader",
     "RelationshipDefinition",
+    "RelationshipTypes",
+    "StandardRelationshipType",
     "SchemaInheritanceError",
     "SchemaLoadError",
     "SchemaLoadResult",

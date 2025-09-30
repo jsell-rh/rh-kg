@@ -21,11 +21,14 @@ This creates:
 from typing import Any
 
 from ..core import (
+    EntitySchema,
+    RelationshipTypes,
     get_logger,
     is_external_dependency,
     parse_external_dependency,
 )
 from .interface import StorageInterface
+from .relationship_processor import RelationshipProcessorFactory
 
 logger = get_logger(__name__)
 
@@ -63,15 +66,24 @@ def parse_external_dependency_uri(uri: str) -> dict[str, str] | None:
 
 
 class DependencyProcessor:
-    """Processes external dependencies into graph entities and relationships."""
+    """Processes external dependencies into graph entities and relationships.
 
-    def __init__(self, storage: StorageInterface):
+    This processor now uses generic relationship management based on schema
+    definitions instead of hard-coded relationship types.
+    """
+
+    def __init__(self, storage: StorageInterface, schemas: dict[str, EntitySchema]):
         """Initialize dependency processor.
 
         Args:
             storage: Storage backend to use for entity/relationship creation
+            schemas: Entity schemas for relationship definitions
         """
         self.storage = storage
+        self.schemas = schemas
+        self.relationship_processor = RelationshipProcessorFactory.create_processor(
+            storage, schemas
+        )
 
     async def parse_and_validate_dependency(
         self, dependency_uri: str
@@ -156,52 +168,6 @@ class DependencyProcessor:
             entity_type, entity_id, entity_data, metadata
         )
 
-    async def create_has_version_relationship(
-        self, package_id: str, version_id: str
-    ) -> bool:
-        """Create has_version relationship between package and version.
-
-        Args:
-            package_id: Package entity ID
-            version_id: Version entity ID
-
-        Returns:
-            True if successful
-        """
-        logger.debug(f"Creating has_version relationship: {package_id} -> {version_id}")
-
-        return await self.storage.create_relationship(
-            source_entity_type="external_dependency_package",
-            source_entity_id=package_id,
-            relationship_type="has_version",
-            target_entity_type="external_dependency_version",
-            target_entity_id=version_id,
-        )
-
-    async def create_depends_on_relationship(
-        self, source_entity_id: str, version_id: str
-    ) -> bool:
-        """Create depends_on relationship between entity and dependency version.
-
-        Args:
-            source_entity_id: Source entity ID (e.g., repository)
-            version_id: Dependency version entity ID
-
-        Returns:
-            True if successful
-        """
-        logger.debug(
-            f"Creating depends_on relationship: {source_entity_id} -> {version_id}"
-        )
-
-        return await self.storage.create_relationship(
-            source_entity_type="repository",  # TODO: Make this configurable
-            source_entity_id=source_entity_id,
-            relationship_type="depends_on",
-            target_entity_type="external_dependency_version",
-            target_entity_id=version_id,
-        )
-
     async def create_dependency_entities(
         self, dependency_uri: str
     ) -> dict[str, str] | None:
@@ -224,9 +190,6 @@ class DependencyProcessor:
             # Create version entity (if it doesn't exist)
             version_id = await self.create_external_dependency_version(parsed)
 
-            # Create has_version relationship
-            await self.create_has_version_relationship(package_id, version_id)
-
             return {
                 "package_id": package_id,
                 "version_id": version_id,
@@ -238,54 +201,81 @@ class DependencyProcessor:
             )
             return None
 
-    async def process_dependencies(
-        self, source_entity_id: str, dependencies: list[str]
+    async def process_entity_relationships(  # noqa: PLR0912
+        self, entity_type: str, entity_id: str, yaml_relationships: dict[str, list[str]]
     ) -> bool:
-        """Process all dependencies for an entity.
+        """Process all relationships for an entity with special handling for depends_on.
 
         Args:
-            source_entity_id: Entity ID that has the dependencies
-            dependencies: List of dependency URIs
+            entity_type: Type of the entity (e.g., "repository")
+            entity_id: Entity ID to update relationships for
+            yaml_relationships: Relationships from YAML (relationship_name -> target_ids)
 
         Returns:
-            True if all dependencies processed successfully
+            True if all relationships processed successfully
         """
-        if not dependencies:
-            return True
-
         logger.info(
-            f"Processing {len(dependencies)} dependencies for {source_entity_id}"
+            f"Processing relationships for {entity_type}/{entity_id}: {list(yaml_relationships.keys())}"
         )
 
-        # Filter to only external dependencies
-        external_dependencies = [
-            dep for dep in dependencies if is_external_dependency(dep)
-        ]
+        try:
+            # Special handling for depends_on relationships
+            depends_on_targets = yaml_relationships.get(
+                RelationshipTypes.DEPENDS_ON, []
+            )
+            if depends_on_targets:
+                logger.debug(
+                    f"Processing {len(depends_on_targets)} {RelationshipTypes.DEPENDS_ON} relationships with entity creation"
+                )
 
-        if len(external_dependencies) != len(dependencies):
-            skipped_count = len(dependencies) - len(external_dependencies)
-            logger.debug(f"Skipping {skipped_count} non-external dependencies")
+                # Create external dependency entities and has_version relationships
+                for target_id in depends_on_targets:
+                    if is_external_dependency(target_id):
+                        result = await self.create_dependency_entities(target_id)
+                        if result:
+                            # Create has_version relationship between package and version
+                            await self.storage.create_relationship(
+                                source_entity_type="external_dependency_package",
+                                source_entity_id=result["package_id"],
+                                relationship_type=RelationshipTypes.HAS_VERSION,
+                                target_entity_type="external_dependency_version",
+                                target_entity_id=result["version_id"],
+                            )
+                            logger.debug(
+                                f"Created {RelationshipTypes.HAS_VERSION} relationship: {result['package_id']} -> {result['version_id']}"
+                            )
+                        else:
+                            logger.warning(
+                                f"Failed to create dependency entities for {target_id}"
+                            )
 
-        success_count = 0
+            # Handle other external dependency relationships (non-depends_on)
+            for relationship_name, target_ids in yaml_relationships.items():
+                if (
+                    relationship_name != RelationshipTypes.DEPENDS_ON
+                ):  # Skip depends_on, handled above
+                    for target_id in target_ids:
+                        if is_external_dependency(target_id):
+                            result = await self.create_dependency_entities(target_id)
+                            if not result:
+                                logger.warning(
+                                    f"Failed to create dependency entities for {target_id}"
+                                )
 
-        for dependency_uri in external_dependencies:
-            try:
-                # Create dependency entities and relationships
-                result = await self.create_dependency_entities(dependency_uri)
-                if result:
-                    # Create depends_on relationship
-                    await self.create_depends_on_relationship(
-                        source_entity_id, result["version_id"]
-                    )
-                    success_count += 1
-                    logger.debug(f"Successfully processed dependency: {dependency_uri}")
-                else:
-                    logger.warning(f"Failed to process dependency: {dependency_uri}")
+            # Use generic relationship processor to replace all relationships
+            success = await self.relationship_processor.replace_entity_relationships(
+                entity_type, entity_id, yaml_relationships
+            )
 
-            except Exception as e:
-                logger.error(f"Error processing dependency {dependency_uri}: {e}")
+            if success:
+                logger.info(f"Successfully processed all relationships for {entity_id}")
+            else:
+                logger.warning(
+                    f"Partial success processing relationships for {entity_id}"
+                )
 
-        logger.info(
-            f"Processed {success_count}/{len(external_dependencies)} external dependencies successfully"
-        )
-        return success_count == len(external_dependencies)
+            return success
+
+        except Exception as e:
+            logger.error(f"Failed to process relationships for {entity_id}: {e}")
+            return False

@@ -230,7 +230,7 @@ class DgraphStorage(StorageInterface):
         # TODO: Store schema_dir in instance variable during load_schemas
         raise NotImplementedError("Schema reload not yet implemented")
 
-    async def store_entity(  # noqa: PLR0912
+    async def store_entity(  # noqa: PLR0912, PLR0915
         self,
         entity_type: str,
         entity_id: str,
@@ -293,14 +293,21 @@ class DgraphStorage(StorageInterface):
             for key, value in metadata.items():
                 mutation_data[f"sys_{key}"] = value
 
-            # Process dependencies if present (external dependencies)
-            depends_on = entity_data.get("depends_on", [])
-            if depends_on:
-                # Remove depends_on from entity data - we'll handle it separately
-                mutation_data.pop("depends_on", None)
-                logger.debug(
-                    f"Processing {len(depends_on)} dependencies for {entity_id}"
-                )
+            # Extract relationship fields that need special processing
+            yaml_relationships = {}
+            schema = self._schemas.get(entity_type)
+            if schema:
+                for relationship in schema.relationships:
+                    rel_name = relationship.name
+                    if rel_name in entity_data:
+                        yaml_relationships[rel_name] = entity_data[rel_name]
+                        # Remove from entity data - we'll handle it separately
+                        mutation_data.pop(rel_name, None)
+
+                if yaml_relationships:
+                    logger.debug(
+                        f"Processing {len(yaml_relationships)} relationship types for {entity_id}: {list(yaml_relationships.keys())}"
+                    )
 
             # Create/update mutation
             txn = self._client.txn()
@@ -313,23 +320,23 @@ class DgraphStorage(StorageInterface):
                 action = "Updated" if existing_entity else "Created"
                 logger.info(f"{action} entity {entity_type}/{entity_id}")
 
-                # Process dependencies after entity creation/update
-                if depends_on:
+                # Process relationships after entity creation/update
+                if yaml_relationships:
                     from .dependency_processor import DependencyProcessor
 
-                    dependency_processor = DependencyProcessor(self)
+                    dependency_processor = DependencyProcessor(self, self._schemas)
 
-                    success = await dependency_processor.process_dependencies(
-                        entity_id, depends_on
+                    success = await dependency_processor.process_entity_relationships(
+                        entity_type, entity_id, yaml_relationships
                     )
 
                     if success:
                         logger.info(
-                            f"Successfully processed {len(depends_on)} dependencies for {entity_id}"
+                            f"Successfully processed relationships for {entity_id}"
                         )
                     else:
                         logger.warning(
-                            f"Some dependencies failed to process for {entity_id}"
+                            f"Some relationships failed to process for {entity_id}"
                         )
 
                 return entity_id
@@ -598,6 +605,148 @@ class DgraphStorage(StorageInterface):
         except Exception as e:
             logger.error(f"Failed to create relationship: {e}")
             raise StorageOperationError(f"Relationship creation failed: {e}") from e
+
+    async def remove_relationship(
+        self,
+        source_entity_type: str,
+        source_entity_id: str,
+        relationship_type: str,
+        target_entity_type: str,
+        target_entity_id: str,
+    ) -> bool:
+        """Remove a specific relationship between two entities."""
+        if not self._connected or not self._client:
+            raise StorageConnectionError("Not connected to Dgraph")
+
+        try:
+            # Find the UIDs for both entities
+            source_query = f"""
+            query {{
+                source(func: eq(id, "{source_entity_id}")) @filter(type({source_entity_type.title()})) {{
+                    uid
+                }}
+            }}
+            """
+
+            target_query = f"""
+            query {{
+                target(func: eq(id, "{target_entity_id}")) @filter(type({target_entity_type.title()})) {{
+                    uid
+                }}
+            }}
+            """
+
+            # Execute both queries
+            source_result = await self._execute_query(source_query)
+            target_result = await self._execute_query(target_query)
+
+            if not source_result.success or not source_result.data.get("source"):
+                logger.warning(
+                    f"Source entity not found for relationship removal: {source_entity_type}/{source_entity_id}"
+                )
+                return False
+
+            if not target_result.success or not target_result.data.get("target"):
+                logger.warning(
+                    f"Target entity not found for relationship removal: {target_entity_type}/{target_entity_id}"
+                )
+                return False
+
+            source_uid = source_result.data["source"][0]["uid"]
+            target_uid = target_result.data["target"][0]["uid"]
+
+            # Remove the relationship using N-Quads deletion
+            txn = self._client.txn()
+            try:
+                # Format: <source_uid> <relationship_type> <target_uid> .
+                nquad = f"<{source_uid}> <{relationship_type}> <{target_uid}> ."
+
+                mutation = pydgraph.Mutation(del_nquads=nquad.encode("utf-8"))
+                txn.mutate(mutation)
+                txn.commit()
+
+                logger.debug(
+                    f"Removed {relationship_type} relationship: "
+                    f"{source_entity_type}/{source_entity_id} -> {target_entity_type}/{target_entity_id}"
+                )
+                return True
+
+            finally:
+                txn.discard()
+
+        except Exception as e:
+            logger.error(f"Failed to remove relationship: {e}")
+            raise StorageOperationError(f"Relationship removal failed: {e}") from e
+
+    async def remove_relationships_by_type(
+        self,
+        source_entity_type: str,
+        source_entity_id: str,
+        relationship_type: str,
+    ) -> int:
+        """Remove all relationships of a specific type from an entity."""
+        if not self._connected or not self._client:
+            raise StorageConnectionError("Not connected to Dgraph")
+
+        try:
+            # Find the source entity UID and all its relationships of the specified type
+            query = f"""
+            query {{
+                entity(func: eq(id, "{source_entity_id}")) @filter(type({source_entity_type.title()})) {{
+                    uid
+                    {relationship_type} {{
+                        uid
+                    }}
+                }}
+            }}
+            """
+
+            result = await self._execute_query(query)
+
+            if not result.success or not result.data.get("entity"):
+                logger.warning(
+                    f"Source entity not found for relationship removal: {source_entity_type}/{source_entity_id}"
+                )
+                return 0
+
+            entity = result.data["entity"][0]
+            source_uid = entity["uid"]
+            targets = entity.get(relationship_type, [])
+
+            if not targets:
+                logger.debug(
+                    f"No {relationship_type} relationships found for {source_entity_id}"
+                )
+                return 0
+
+            # Remove all relationships of this type
+            txn = self._client.txn()
+            try:
+                del_nquads = []
+                for target in targets:
+                    target_uid = target["uid"]
+                    nquad = f"<{source_uid}> <{relationship_type}> <{target_uid}> ."
+                    del_nquads.append(nquad)
+
+                if del_nquads:
+                    mutation = pydgraph.Mutation(
+                        del_nquads="\n".join(del_nquads).encode("utf-8")
+                    )
+                    txn.mutate(mutation)
+                    txn.commit()
+
+                removed_count = len(del_nquads)
+                logger.debug(
+                    f"Removed {removed_count} {relationship_type} relationships from {source_entity_id}"
+                )
+                return removed_count
+
+            finally:
+                txn.discard()
+
+        except Exception as e:
+            logger.error(f"Failed to remove relationships by type: {e}")
+            raise StorageOperationError(f"Relationship removal failed: {e}") from e
 
     async def find_entities_with_relationship(
         self,

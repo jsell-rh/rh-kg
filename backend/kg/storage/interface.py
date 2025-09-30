@@ -247,6 +247,54 @@ class StorageInterface(ABC):
         pass
 
     @abstractmethod
+    async def remove_relationship(
+        self,
+        source_entity_type: str,
+        source_entity_id: str,
+        relationship_type: str,
+        target_entity_type: str,
+        target_entity_id: str,
+    ) -> bool:
+        """Remove a specific relationship between two entities.
+
+        Args:
+            source_entity_type: Type of the source entity
+            source_entity_id: ID of the source entity
+            relationship_type: Type of relationship to remove
+            target_entity_type: Type of the target entity
+            target_entity_id: ID of the target entity
+
+        Returns:
+            True if relationship was removed successfully
+
+        Raises:
+            StorageOperationError: If relationship removal fails
+        """
+        pass
+
+    @abstractmethod
+    async def remove_relationships_by_type(
+        self,
+        source_entity_type: str,
+        source_entity_id: str,
+        relationship_type: str,
+    ) -> int:
+        """Remove all relationships of a specific type from an entity.
+
+        Args:
+            source_entity_type: Type of the source entity
+            source_entity_id: ID of the source entity
+            relationship_type: Type of relationships to remove
+
+        Returns:
+            Number of relationships removed
+
+        Raises:
+            StorageOperationError: If relationship removal fails
+        """
+        pass
+
+    @abstractmethod
     async def get_entity_relationships(
         self, entity_type: str, entity_id: str
     ) -> list[RelationshipData]:

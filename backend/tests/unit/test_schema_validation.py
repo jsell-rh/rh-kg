@@ -386,15 +386,26 @@ allow_custom_fields: false
 class TestSchemaValidationRobustness:
     """Test schema validation handles edge cases correctly."""
 
-    async def test_empty_schema_directory_should_fail(self):
-        """Test that an empty schema directory fails gracefully."""
+    async def test_empty_schema_directory_should_warn(self):
+        """Test that an empty schema directory produces a warning but succeeds."""
+        import warnings
 
         with tempfile.TemporaryDirectory() as temp_dir:
             loader = FileSchemaLoader(temp_dir)
 
-            # Should fail because no schemas found
-            with pytest.raises((SchemaLoadError, SchemaValidationError)):
-                await loader.load_schemas()
+            # Should succeed but produce a warning
+            with warnings.catch_warnings(record=True) as warning_list:
+                warnings.simplefilter("always")
+                schemas = await loader.load_schemas()
+
+                # Should return empty schemas
+                assert len(schemas) == 0
+
+                # Should have produced a warning
+                assert len(warning_list) > 0
+                assert any(
+                    "No entity schemas found" in str(w.message) for w in warning_list
+                )
 
     async def test_schema_with_missing_base_should_fail(self):
         """Test that schema extending non-existent base fails."""

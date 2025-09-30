@@ -408,12 +408,20 @@ class DynamicModelFactory:
         for relationship in schema.relationships:
             target_types = relationship.target_types
 
-            # If relationship targets external_dependency_version, validate external URIs
-            if "external_dependency_version" in target_types:
+            # Handle mixed dependency relationships (both external and internal)
+            if (
+                "external_dependency_version" in target_types
+                and "repository" in target_types
+            ):
+                validators[f"validate_{relationship.name}"] = field_validator(
+                    relationship.name
+                )(self._validate_mixed_dependency_references)
+            # If relationship targets only external_dependency_version, validate external URIs
+            elif "external_dependency_version" in target_types:
                 validators[f"validate_{relationship.name}"] = field_validator(
                     relationship.name
                 )(self._validate_external_dependency_references)
-            # If relationship targets repository, validate internal URIs
+            # If relationship targets only repository, validate internal URIs
             elif "repository" in target_types:
                 validators[f"validate_{relationship.name}"] = field_validator(
                     relationship.name
@@ -446,6 +454,35 @@ class DynamicModelFactory:
                 "contain only lowercase letters, numbers, underscores, hyphens, "
                 "and end with lowercase letter or number"
             )
+        return v
+
+    @staticmethod
+    def _validate_mixed_dependency_references(
+        v: list[str] | None,
+    ) -> list[str] | None:
+        """Validate dependency references that can be either external or internal."""
+        if v is None:
+            return v
+
+        from ..core.dependency_types import DependencyType
+
+        for dep in v:
+            dep_type = DependencyType.identify_dependency_type(dep)
+            if dep_type not in (DependencyType.EXTERNAL, DependencyType.INTERNAL):
+                raise ValueError(
+                    f'Invalid dependency reference "{dep}". '
+                    "Must use format: external://<ecosystem>/<package>/<version> "
+                    "or internal://<namespace>/<entity-name>"
+                )
+            # Additional validation using parse_uri to ensure format is correct
+            parsed = dep_type.parse_uri(dep)
+            if not parsed:
+                raise ValueError(
+                    f'Invalid dependency format "{dep}". '
+                    "Must use format: external://<ecosystem>/<package>/<version> "
+                    "or internal://<namespace>/<entity-name>"
+                )
+
         return v
 
     @staticmethod

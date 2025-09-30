@@ -19,6 +19,9 @@ import pytest
 from kg.core import (
     DependencyType,
     DependencyUriBuilder,
+    EntitySchema,
+    RelationshipDefinition,
+    RelationshipTypes,
     is_external_dependency,
     parse_external_dependency,
 )
@@ -79,13 +82,93 @@ def mock_storage_with_relationships():
         storage._relationships.append(relationship)
         return True
 
+    async def mock_remove_relationships_by_type(
+        source_entity_type: str, source_entity_id: str, relationship_type: str
+    ) -> int:
+        """Remove relationships and return count."""
+        removed_count = 0
+        for rel in storage._relationships[:]:  # Create a copy to iterate over
+            if (
+                rel["source_entity_type"] == source_entity_type
+                and rel["source_entity_id"] == source_entity_id
+                and rel["relationship_type"] == relationship_type
+            ):
+                storage._relationships.remove(rel)
+                removed_count += 1
+        return removed_count
+
     storage.get_entity = AsyncMock(side_effect=mock_get_entity)
     storage.store_entity = AsyncMock(side_effect=mock_store_entity)
     storage.create_relationship = AsyncMock(side_effect=mock_create_relationship)
+    storage.remove_relationships_by_type = AsyncMock(
+        side_effect=mock_remove_relationships_by_type
+    )
     storage.connect = AsyncMock()
     storage.entity_exists = AsyncMock(return_value=True)
 
     return storage
+
+
+@pytest.fixture
+def mock_schemas():
+    """Create mock schemas for testing."""
+    return {
+        "repository": EntitySchema(
+            entity_type="repository",
+            schema_version="1.0.0",
+            description="Repository schema",
+            extends=None,
+            required_fields=[],
+            optional_fields=[],
+            readonly_fields=[],
+            relationships=[
+                RelationshipDefinition(
+                    name=RelationshipTypes.DEPENDS_ON,
+                    description="External dependencies",
+                    target_types=["external_dependency_version"],
+                    cardinality="one_to_many",
+                    direction="outbound",
+                ),
+            ],
+            validation_rules={},
+            dgraph_type="Repository",
+            dgraph_predicates={},
+        ),
+        "external_dependency_package": EntitySchema(
+            entity_type="external_dependency_package",
+            schema_version="1.0.0",
+            description="External dependency package schema",
+            extends=None,
+            required_fields=[],
+            optional_fields=[],
+            readonly_fields=[],
+            relationships=[
+                RelationshipDefinition(
+                    name=RelationshipTypes.HAS_VERSION,
+                    description="Package versions",
+                    target_types=["external_dependency_version"],
+                    cardinality="one_to_many",
+                    direction="outbound",
+                ),
+            ],
+            validation_rules={},
+            dgraph_type="ExternalDependencyPackage",
+            dgraph_predicates={},
+        ),
+        "external_dependency_version": EntitySchema(
+            entity_type="external_dependency_version",
+            schema_version="1.0.0",
+            description="External dependency version schema",
+            extends=None,
+            required_fields=[],
+            optional_fields=[],
+            readonly_fields=[],
+            relationships=[],
+            validation_rules={},
+            dgraph_type="ExternalDependencyVersion",
+            dgraph_predicates={},
+        ),
+    }
 
 
 @pytest.mark.asyncio
@@ -233,12 +316,12 @@ class TestExternalDependencyEntityCreation:
     """Test creation of external dependency entities."""
 
     async def test_create_external_dependency_package_entity(
-        self, mock_storage_with_relationships
+        self, mock_storage_with_relationships, mock_schemas
     ):
         """Test creation of ExternalDependencyPackage entity."""
         from kg.storage.dependency_processor import DependencyProcessor
 
-        processor = DependencyProcessor(mock_storage_with_relationships)
+        processor = DependencyProcessor(mock_storage_with_relationships, mock_schemas)
 
         package_info = {
             "ecosystem": "pypi",
@@ -259,12 +342,12 @@ class TestExternalDependencyEntityCreation:
         assert package_entity["metadata"]["package_name"] == "requests"
 
     async def test_create_external_dependency_version_entity(
-        self, mock_storage_with_relationships
+        self, mock_storage_with_relationships, mock_schemas
     ):
         """Test creation of ExternalDependencyVersion entity."""
         from kg.storage.dependency_processor import DependencyProcessor
 
-        processor = DependencyProcessor(mock_storage_with_relationships)
+        processor = DependencyProcessor(mock_storage_with_relationships, mock_schemas)
 
         version_info = {
             "ecosystem": "pypi",
@@ -288,12 +371,12 @@ class TestExternalDependencyEntityCreation:
         assert version_entity["metadata"]["version"] == "2.31.0"
 
     async def test_create_dependency_entities_creates_both_package_and_version(
-        self, mock_storage_with_relationships
+        self, mock_storage_with_relationships, mock_schemas
     ):
         """Test that creating dependency entities creates both package and version."""
         from kg.storage.dependency_processor import DependencyProcessor
 
-        processor = DependencyProcessor(mock_storage_with_relationships)
+        processor = DependencyProcessor(mock_storage_with_relationships, mock_schemas)
 
         dependency_uri = "external://pypi/requests/2.31.0"
 
@@ -315,18 +398,23 @@ class TestExternalDependencyEntityCreation:
 class TestDependencyRelationshipCreation:
     """Test creation of dependency relationships."""
 
-    async def test_create_has_version_relationship(
-        self, mock_storage_with_relationships
+    async def test_process_entity_relationships_for_package(
+        self, mock_storage_with_relationships, mock_schemas
     ):
-        """Test creation of has_version relationship between package and version."""
+        """Test processing relationships for an external dependency package."""
         from kg.storage.dependency_processor import DependencyProcessor
 
-        processor = DependencyProcessor(mock_storage_with_relationships)
+        processor = DependencyProcessor(mock_storage_with_relationships, mock_schemas)
 
         package_id = "external://pypi/requests"
         version_id = "external://pypi/requests/2.31.0"
 
-        result = await processor.create_has_version_relationship(package_id, version_id)
+        # Process relationships for the package
+        yaml_relationships = {RelationshipTypes.HAS_VERSION: [version_id]}
+
+        result = await processor.process_entity_relationships(
+            "external_dependency_package", package_id, yaml_relationships
+        )
 
         assert result is True
 
@@ -334,25 +422,30 @@ class TestDependencyRelationshipCreation:
         expected_relationship = {
             "source_entity_type": "external_dependency_package",
             "source_entity_id": package_id,
-            "relationship_type": "has_version",
+            "relationship_type": RelationshipTypes.HAS_VERSION,
             "target_entity_type": "external_dependency_version",
             "target_entity_id": version_id,
         }
 
         assert expected_relationship in mock_storage_with_relationships._relationships
 
-    async def test_create_depends_on_relationship(
-        self, mock_storage_with_relationships
+    async def test_process_entity_relationships_for_repository(
+        self, mock_storage_with_relationships, mock_schemas
     ):
-        """Test creation of depends_on relationship between repository and dependency version."""
+        """Test processing relationships for a repository with dependencies."""
         from kg.storage.dependency_processor import DependencyProcessor
 
-        processor = DependencyProcessor(mock_storage_with_relationships)
+        processor = DependencyProcessor(mock_storage_with_relationships, mock_schemas)
 
         repo_id = "test-namespace/test-repo"
         version_id = "external://pypi/requests/2.31.0"
 
-        result = await processor.create_depends_on_relationship(repo_id, version_id)
+        # Process relationships for the repository
+        yaml_relationships = {RelationshipTypes.DEPENDS_ON: [version_id]}
+
+        result = await processor.process_entity_relationships(
+            "repository", repo_id, yaml_relationships
+        )
 
         assert result is True
 
@@ -360,7 +453,7 @@ class TestDependencyRelationshipCreation:
         expected_relationship = {
             "source_entity_type": "repository",
             "source_entity_id": repo_id,
-            "relationship_type": "depends_on",
+            "relationship_type": RelationshipTypes.DEPENDS_ON,
             "target_entity_type": "external_dependency_version",
             "target_entity_id": version_id,
         }
@@ -373,17 +466,20 @@ class TestDependencyProcessingIntegration:
     """Test integration of dependency processing with store_entity."""
 
     async def test_process_single_external_dependency(
-        self, mock_storage_with_relationships
+        self, mock_storage_with_relationships, mock_schemas
     ):
         """Test processing a single external dependency."""
         from kg.storage.dependency_processor import DependencyProcessor
 
-        processor = DependencyProcessor(mock_storage_with_relationships)
+        processor = DependencyProcessor(mock_storage_with_relationships, mock_schemas)
 
         repo_entity_id = "test-namespace/test-repo"
         dependencies = ["external://pypi/requests/2.31.0"]
 
-        result = await processor.process_dependencies(repo_entity_id, dependencies)
+        yaml_relationships = {RelationshipTypes.DEPENDS_ON: dependencies}
+        result = await processor.process_entity_relationships(
+            "repository", repo_entity_id, yaml_relationships
+        )
 
         assert result is True
 
@@ -411,19 +507,19 @@ class TestDependencyProcessingIntegration:
         depends_on_rel = {
             "source_entity_type": "repository",
             "source_entity_id": repo_entity_id,
-            "relationship_type": "depends_on",
+            "relationship_type": RelationshipTypes.DEPENDS_ON,
             "target_entity_type": "external_dependency_version",
             "target_entity_id": "external://pypi/requests/2.31.0",
         }
         assert depends_on_rel in mock_storage_with_relationships._relationships
 
     async def test_process_multiple_external_dependencies(
-        self, mock_storage_with_relationships
+        self, mock_storage_with_relationships, mock_schemas
     ):
         """Test processing multiple external dependencies."""
         from kg.storage.dependency_processor import DependencyProcessor
 
-        processor = DependencyProcessor(mock_storage_with_relationships)
+        processor = DependencyProcessor(mock_storage_with_relationships, mock_schemas)
 
         repo_entity_id = "test-namespace/test-repo"
         dependencies = [
@@ -432,7 +528,10 @@ class TestDependencyProcessingIntegration:
             "external://pypi/numpy/1.24.0",
         ]
 
-        result = await processor.process_dependencies(repo_entity_id, dependencies)
+        yaml_relationships = {RelationshipTypes.DEPENDS_ON: dependencies}
+        result = await processor.process_entity_relationships(
+            "repository", repo_entity_id, yaml_relationships
+        )
 
         assert result is True
 
@@ -460,12 +559,12 @@ class TestDependencyProcessingIntegration:
         assert len(mock_storage_with_relationships._relationships) == 6
 
     async def test_process_dependencies_with_internal_references_ignored(
-        self, mock_storage_with_relationships
+        self, mock_storage_with_relationships, mock_schemas
     ):
         """Test that internal references are ignored during dependency processing."""
         from kg.storage.dependency_processor import DependencyProcessor
 
-        processor = DependencyProcessor(mock_storage_with_relationships)
+        processor = DependencyProcessor(mock_storage_with_relationships, mock_schemas)
 
         repo_entity_id = "test-namespace/test-repo"
         dependencies = [
@@ -475,7 +574,10 @@ class TestDependencyProcessingIntegration:
             "",  # Should be ignored
         ]
 
-        result = await processor.process_dependencies(repo_entity_id, dependencies)
+        yaml_relationships = {RelationshipTypes.DEPENDS_ON: dependencies}
+        result = await processor.process_entity_relationships(
+            "repository", repo_entity_id, yaml_relationships
+        )
 
         assert result is True
 
@@ -486,8 +588,10 @@ class TestDependencyProcessingIntegration:
         assert package_key in mock_storage_with_relationships._entities
         assert version_key in mock_storage_with_relationships._entities
 
-        # Verify only external dependency relationships were created (1 has_version + 1 depends_on = 2 total)
-        assert len(mock_storage_with_relationships._relationships) == 2
+        # Verify relationships were created:
+        # - 1 has_version relationship (package -> version)
+        # - 4 depends_on relationships (repo -> each target, including invalid ones)
+        assert len(mock_storage_with_relationships._relationships) == 5
 
         # Verify only the external dependency was processed
         external_deps = [dep for dep in dependencies if is_external_dependency(dep)]
@@ -499,7 +603,7 @@ class TestStoreEntityDependencyIntegration:
     """Test that store_entity properly integrates dependency processing."""
 
     async def test_store_entity_processes_depends_on_field(
-        self, mock_storage_with_relationships
+        self, mock_storage_with_relationships, mock_schemas
     ):
         """Test that store_entity processes depends_on field and creates dependency entities."""
         # This test will initially fail because store_entity doesn't call dependency processing yet
@@ -509,7 +613,7 @@ class TestStoreEntityDependencyIntegration:
         entity_data = {
             "owners": ["test@example.com"],
             "git_repo_url": "https://github.com/test/repo",
-            "depends_on": ["external://pypi/requests/2.31.0"],
+            RelationshipTypes.DEPENDS_ON: ["external://pypi/requests/2.31.0"],
         }
         metadata = {"namespace": "test-namespace", "source_name": "test-repo"}
 
@@ -521,12 +625,17 @@ class TestStoreEntityDependencyIntegration:
             )
 
             # Process dependencies if present
-            depends_on = entity_data.get("depends_on", [])
+            depends_on = entity_data.get(RelationshipTypes.DEPENDS_ON, [])
             if depends_on:
                 from kg.storage.dependency_processor import DependencyProcessor
 
-                processor = DependencyProcessor(mock_storage_with_relationships)
-                await processor.process_dependencies(entity_id, depends_on)
+                processor = DependencyProcessor(
+                    mock_storage_with_relationships, mock_schemas
+                )
+                yaml_relationships = {RelationshipTypes.DEPENDS_ON: depends_on}
+                await processor.process_entity_relationships(
+                    "repository", entity_id, yaml_relationships
+                )
 
             return result
 

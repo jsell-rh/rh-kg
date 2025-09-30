@@ -303,6 +303,48 @@ class MockStorage(StorageInterface):
 
         return True
 
+    async def remove_relationship(
+        self,
+        source_entity_type: str,
+        source_entity_id: str,
+        relationship_type: str,
+        target_entity_type: str,  # noqa: ARG002
+        target_entity_id: str,
+    ) -> bool:
+        """Remove a specific relationship between entities in mock storage."""
+        source_entity = self.entities.get(source_entity_type, {}).get(source_entity_id)
+        if not source_entity:
+            return False
+
+        metadata = source_entity.get("metadata", {})
+        relationships = metadata.get(relationship_type, [])
+
+        if target_entity_id in relationships:
+            relationships.remove(target_entity_id)
+            return True
+
+        return False
+
+    async def remove_relationships_by_type(
+        self,
+        source_entity_type: str,
+        source_entity_id: str,
+        relationship_type: str,
+    ) -> int:
+        """Remove all relationships of a specific type from an entity in mock storage."""
+        source_entity = self.entities.get(source_entity_type, {}).get(source_entity_id)
+        if not source_entity:
+            return 0
+
+        metadata = source_entity.get("metadata", {})
+        relationships = metadata.get(relationship_type, [])
+        removed_count = len(relationships)
+
+        # Clear the relationship list
+        metadata[relationship_type] = []
+
+        return removed_count
+
     # System Operations
 
     async def get_system_metrics(self) -> SystemMetrics:

@@ -80,9 +80,9 @@ class TestStorageUpsertBehavior:
             # CRITICAL TEST: Query Dgraph directly to verify no duplicates exist
             query = f"""
             {{
-                entities(func: eq(entity_id, "{entity_id}")) @filter(eq(dgraph.type, "{entity_type}")) {{
+                entities(func: eq(id, "{entity_id}")) @filter(eq(dgraph.type, "{entity_type}")) {{
                     uid
-                    entity_id
+                    id
                     entity_type
                 }}
             }}

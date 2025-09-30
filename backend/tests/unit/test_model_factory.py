@@ -112,8 +112,8 @@ class TestDynamicModelFactory:
             relationships=[
                 RelationshipDefinition(
                     name="depends_on",
-                    description="External dependencies",
-                    target_types=["external_dependency_version"],
+                    description="External and internal dependencies",
+                    target_types=["external_dependency_version", "repository"],
                     cardinality="one_to_many",
                     direction="outbound",
                 ),
@@ -163,7 +163,7 @@ class TestDynamicModelFactory:
         # Check field types
         owners_field = fields["owners"]
         # Should be list[EmailStr] for email validation
-        assert get_origin(owners_field.annotation) == list
+        assert get_origin(owners_field.annotation) is list
         email_type = get_args(owners_field.annotation)[0]
         assert email_type == EmailStr
 
@@ -191,21 +191,21 @@ class TestDynamicModelFactory:
 
         model_class = factory.create_entity_model(schema)
         fields = model_class.model_fields
-        assert fields["test"].annotation == str
+        assert fields["test"].annotation is str
 
         # Test integer type
         field_def.type = "integer"
         factory.clear_cache()  # Clear cache to force regeneration
         model_class = factory.create_entity_model(schema)
         fields = model_class.model_fields
-        assert fields["test"].annotation == int
+        assert fields["test"].annotation is int
 
         # Test boolean type
         field_def.type = "boolean"
         factory.clear_cache()
         model_class = factory.create_entity_model(schema)
         fields = model_class.model_fields
-        assert fields["test"].annotation == bool
+        assert fields["test"].annotation is bool
 
         # Test datetime type
         field_def.type = "datetime"
@@ -244,8 +244,8 @@ class TestDynamicModelFactory:
 
         # Check it's a list type
         tags_field = fields["tags"]
-        assert get_origin(tags_field.annotation) == list
-        assert get_args(tags_field.annotation)[0] == str
+        assert get_origin(tags_field.annotation) is list
+        assert get_args(tags_field.annotation)[0] is str
 
         # Check constraints - they're in the metadata
         field_info = tags_field
@@ -290,16 +290,8 @@ class TestDynamicModelFactory:
 
     def test_dependency_validation(self, factory, repository_schema):
         """Test dependency reference validation."""
-        # Add depends_on field to repository schema
-        depends_on_field = FieldDefinition(
-            name="depends_on",
-            type="array",
-            items="string",
-            required=True,
-            description="Dependency references",
-        )
-        repository_schema.required_fields.append(depends_on_field)
-
+        # The repository schema already has a depends_on relationship defined
+        # that should handle both external and internal dependencies
         model_class = factory.create_entity_model(repository_schema)
 
         # Test valid dependency references
@@ -324,7 +316,7 @@ class TestDynamicModelFactory:
                     "depends_on": ["invalid-dependency"],
                 }
             )
-        assert "Invalid dependency reference" in str(exc_info.value)
+        assert "Invalid dependency" in str(exc_info.value)
 
         # Test invalid external dependency (missing version)
         with pytest.raises(ValidationError) as exc_info:
@@ -335,7 +327,7 @@ class TestDynamicModelFactory:
                     "depends_on": ["external://pypi/requests"],
                 }
             )
-        assert "Invalid dependency reference" in str(exc_info.value)
+        assert "Invalid dependency" in str(exc_info.value)
 
     def test_create_root_model(self, factory):
         """Test creating the root YAML validation model."""

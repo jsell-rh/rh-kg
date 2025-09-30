@@ -9,6 +9,7 @@ from abc import ABC, abstractmethod
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+import warnings
 
 import yaml
 
@@ -92,6 +93,15 @@ class FileSchemaLoader(SchemaLoader):
 
             # Load entity schemas
             entity_schemas = await self._load_entity_schemas(schema_path, base_schemas)
+
+            # Warn if no entity schemas were loaded
+            if not entity_schemas:
+                warnings.warn(
+                    f"No entity schemas found in directory: {schema_path}. "
+                    "The knowledge graph will be empty until schema files are added.",
+                    UserWarning,
+                    stacklevel=2,
+                )
 
             # Validate consistency
             errors = await self.validate_schema_consistency(entity_schemas)
