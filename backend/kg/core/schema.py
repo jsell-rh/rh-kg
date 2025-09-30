@@ -34,6 +34,13 @@ class FieldDefinition:
     pattern: str | None = None
     items: str | None = None  # For array types
 
+    # Deprecation metadata
+    deprecated: bool = False
+    deprecated_since: str | None = None
+    deprecated_reason: str | None = None
+    removal_planned: str | None = None
+    migration_guide: str | None = None
+
 
 @dataclass
 class RelationshipDefinition:
@@ -48,6 +55,13 @@ class RelationshipDefinition:
     target_types: list[str]
     cardinality: str
     direction: str
+
+    # Deprecation metadata
+    deprecated: bool = False
+    deprecated_since: str | None = None
+    deprecated_reason: str | None = None
+    removal_planned: str | None = None
+    migration_guide: str | None = None
 
 
 @dataclass
