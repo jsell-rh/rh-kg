@@ -8,6 +8,7 @@ from pathlib import Path
 import tempfile
 
 import pytest
+import pytest_asyncio
 import yaml
 
 from kg.core.json_schema_generator import JSONSchemaExporter, JSONSchemaGenerator
@@ -310,13 +311,13 @@ class TestJSONSchemaEntityGeneration:
 class TestJSONSchemaTopLevelStructure:
     """Test generation of top-level JSON Schema structure."""
 
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def temp_schemas(self) -> Path:
         """Create temporary schema directory with minimal schemas."""
         with tempfile.TemporaryDirectory() as tmpdir:
             schema_dir = Path(tmpdir)
 
-            # Create base_internal schema
+            # Create base_internal schema (flat structure)
             base_internal = {
                 "schema_type": "base_internal",
                 "schema_version": "1.0.0",
@@ -329,7 +330,7 @@ class TestJSONSchemaTopLevelStructure:
                 "allow_custom_fields": False,
             }
 
-            # Create repository schema
+            # Create repository schema (flat structure)
             repository_schema = {
                 "entity_type": "repository",
                 "schema_version": "1.0.0",
@@ -345,12 +346,7 @@ class TestJSONSchemaTopLevelStructure:
                     "git_repo_url": {"type": "string", "validation": "url"},
                 },
                 "optional_metadata": {},
-                "relationships": {
-                    "depends_on": {
-                        "target_types": ["external_dependency_version"],
-                        "cardinality": "one_to_many",
-                    }
-                },
+                "relationships": {},
                 "dgraph_type": "Repository",
             }
 
@@ -440,6 +436,10 @@ class TestJSONSchemaTopLevelStructure:
     @pytest.mark.asyncio
     async def test_entity_types_included(self, temp_schemas):
         """Test all entity types are included in entity container."""
+        # Verify fixture created files
+        assert (temp_schemas / "repository.yaml").exists()
+        assert (temp_schemas / "base_internal.yaml").exists()
+
         loader = FileSchemaLoader(str(temp_schemas))
         generator = JSONSchemaGenerator(loader)
 
@@ -451,6 +451,9 @@ class TestJSONSchemaTopLevelStructure:
     @pytest.mark.asyncio
     async def test_definitions_section(self, temp_schemas):
         """Test $defs section contains entity and reference definitions."""
+        # Verify fixture created files
+        assert (temp_schemas / "repository.yaml").exists()
+
         loader = FileSchemaLoader(str(temp_schemas))
         generator = JSONSchemaGenerator(loader)
 
@@ -528,7 +531,7 @@ class TestJSONSchemaExporter:
             schema_dir.mkdir()
             output_file = Path(tmpdir) / "schema.json"
 
-            # Create minimal schema
+            # Create minimal schema (flat structure)
             base_internal = {
                 "schema_type": "base_internal",
                 "schema_version": "1.0.0",
@@ -581,7 +584,7 @@ class TestJSONSchemaExporter:
             schema_dir.mkdir()
             output_file = Path(tmpdir) / "schema.json"
 
-            # Create minimal schema
+            # Create minimal schema (flat structure)
             base = {
                 "schema_type": "base_internal",
                 "schema_version": "1.0.0",
@@ -613,7 +616,7 @@ class TestJSONSchemaExporter:
             schema_dir.mkdir()
             output_file = Path(tmpdir) / "schema.json"
 
-            # Create minimal schema
+            # Create minimal schema (flat structure)
             base = {
                 "schema_type": "base_internal",
                 "schema_version": "1.0.0",
