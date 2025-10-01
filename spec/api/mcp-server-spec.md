@@ -997,17 +997,14 @@ All MCP queries are logged with:
 
 ## Implementation Checklist
 
-### Phase 1: Core MCP Integration
+### Phase 1: FastMCP Integration
 
-- [ ] Create MCP router module in FastAPI server
-- [ ] Add `/mcp/sse` endpoint with SSE transport
-- [ ] Add `/mcp/http` endpoint with HTTP transport
-- [ ] Add `/mcp/health` and `/mcp/info` endpoints
-- [ ] Implement MCP protocol handler (FastMCP integration)
-- [ ] Add GraphQL AST validation for read-only enforcement
-- [ ] Create Dgraph GraphQL client wrapper (shared with REST)
-- [ ] Implement error handling and sanitization
-- [ ] Add MCP-specific logging (reuses shared logger)
+- [ ] Create `backend/kg/api/mcp/server.py` module
+- [ ] Initialize FastMCP instance with server metadata
+- [ ] Add GraphQL AST validation function for read-only queries
+- [ ] Mount FastMCP app in `backend/kg/api/main.py` with `app.mount("/mcp", mcp)`
+- [ ] Add MCP config fields to `APIConfig` in `backend/kg/api/config.py`
+- [ ] Update docker-compose.yml with optional MCP environment variables
 
 ### Phase 2: Resources
 
@@ -1242,196 +1239,128 @@ All MCP queries are logged with:
 
 ## Deployment
 
-### Integrated Server Architecture
+### FastMCP Integration with FastAPI
 
-The MCP module runs within the main Knowledge Graph API server - there is **no separate MCP service to deploy**. When you start the API server, both REST (`/api/v1/*`) and MCP (`/mcp/*`) endpoints are available automatically.
+The MCP server is built using **FastMCP** and mounted into the existing FastAPI application as a sub-application. FastMCP provides an ASGI app that integrates with FastAPI via `app.mount()`.
 
-**Development (Local)**:
-
-```bash
-# Start the unified API server (includes both REST and MCP)
-kg server start
-
-# Server provides both interfaces:
-# - REST API: http://localhost:8000/api/v1/*
-# - MCP Server: http://localhost:8000/mcp/*
-```
-
-**Production (systemd)**:
-
-```bash
-# Single service runs both interfaces
-sudo systemctl start kg-server
-sudo systemctl status kg-server
-```
-
-**Production (Docker)**:
-
-```bash
-# Single container hosts both REST and MCP
-docker run -p 8000:8000 \
-  -e KG_DGRAPH_URL=http://dgraph:8080 \
-  -e KG_MCP_MAX_QUERY_COMPLEXITY=10000 \
-  -e KG_MCP_QUERY_TIMEOUT_SECONDS=30 \
-  kg-server:latest
-```
-
-**Production (Kubernetes)**:
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: kg-server
-spec:
-  replicas: 3
-  template:
-    spec:
-      containers:
-        - name: kg-server
-          image: kg-server:latest
-          ports:
-            - containerPort: 8000 # Single port for both interfaces
-          env:
-            - name: KG_DGRAPH_URL
-              value: "http://dgraph:8080"
-            - name: KG_MCP_MAX_QUERY_COMPLEXITY
-              value: "10000"
-            - name: KG_MCP_QUERY_TIMEOUT_SECONDS
-              value: "30"
-            - name: KG_LOG_LEVEL
-              value: "info"
-          envFrom:
-            - secretRef:
-                name: kg-secrets # Authentication tokens, etc.
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: kg-server
-spec:
-  ports:
-    - port: 80
-      targetPort: 8000
-  selector:
-    app: kg-server
-```
-
-### Configuration via Environment Variables
-
-The MCP module shares the same Pydantic Settings-based configuration as the REST API. All configuration is done via environment variables (no config files needed).
-
-**Core Settings** (shared between REST and MCP):
-
-```bash
-# Server settings
-KG_SERVER_HOST=0.0.0.0
-KG_SERVER_PORT=8000
-KG_SERVER_WORKERS=4
-
-# Dgraph connection
-KG_DGRAPH_URL=http://localhost:8080
-KG_DGRAPH_GRAPHQL_ENDPOINT=/graphql
-KG_DGRAPH_CONNECTION_POOL_SIZE=10
-
-# Authentication (shared by both REST and MCP)
-KG_AUTH_ENABLED=true
-KG_AUTH_TOKEN_VALIDATION_URL=https://auth.redhat.com/validate
-
-# Logging (shared)
-KG_LOG_LEVEL=info
-KG_LOG_FORMAT=json
-```
-
-**MCP-Specific Settings**:
-
-```bash
-# Transport options
-KG_MCP_ENABLE_SSE=true           # Enable SSE transport (default: true)
-KG_MCP_ENABLE_HTTP=true          # Enable HTTP transport (default: true)
-
-# Query limits
-KG_MCP_MAX_QUERY_COMPLEXITY=10000     # Maximum query complexity score
-KG_MCP_MAX_QUERY_DEPTH=10             # Maximum query nesting depth
-KG_MCP_QUERY_TIMEOUT_SECONDS=30       # Query execution timeout
-
-# Rate limiting
-KG_MCP_RATE_LIMIT_PER_MINUTE=100      # Max queries per minute per client
-KG_MCP_RATE_LIMIT_BURST=20            # Burst allowance
-
-# Audit logging
-KG_MCP_AUDIT_LOG_ENABLED=true         # Enable MCP query audit logging
-```
-
-**REST-Specific Settings**:
-
-```bash
-# Upload limits
-KG_REST_MAX_UPLOAD_SIZE_MB=10
-
-# CORS
-KG_REST_ENABLE_CORS=true
-KG_REST_CORS_ORIGINS=http://localhost:3000,https://console.redhat.com
-```
-
-**Example `.env` file for development**:
-
-```bash
-# .env
-KG_DGRAPH_URL=http://localhost:8080
-KG_LOG_LEVEL=debug
-KG_AUTH_ENABLED=false
-KG_MCP_MAX_QUERY_COMPLEXITY=5000
-KG_MCP_AUDIT_LOG_ENABLED=true
-```
-
-**Pydantic Settings Model Example**:
+**Implementation** (`backend/kg/api/mcp/server.py`):
 
 ```python
-from pydantic_settings import BaseSettings
+from fastmcp import FastMCP
+from ..dependencies import get_storage
+from ..config import config
 
-class ServerSettings(BaseSettings):
+# Create FastMCP server instance
+mcp = FastMCP(
+    name="kg-server",
+    version="1.0.0"
+)
+
+@mcp.resource("kg://schema")
+async def get_schema() -> str:
+    """GraphQL schema introspection."""
+    storage = await get_storage()
+    return await storage.get_graphql_schema()
+
+@mcp.tool()
+async def query_graph(graphql: str) -> dict:
+    """Execute read-only GraphQL query."""
+    validate_read_only(graphql)  # Raises if mutation detected
+    storage = await get_storage()
+    return await storage.execute_graphql(graphql)
+```
+
+**Mounting in FastAPI** (`backend/kg/api/main.py`):
+
+```python
+from fastapi import FastAPI
+from .mcp.server import mcp
+
+def create_app() -> FastAPI:
+    app = FastAPI(...)
+
+    # Existing routers
+    app.include_router(health_router, tags=["health"])
+
+    # Mount FastMCP application at /mcp
+    app.mount("/mcp", mcp)  # FastMCP is ASGI-compatible
+
+    return app
+```
+
+**Starting the Backend**:
+
+No changes to how you start the backend:
+
+```bash
+# Development: Use docker-compose as always
+docker-compose up
+
+# The backend container now serves:
+# - Existing endpoints: http://localhost:8000/health, /docs
+# - MCP endpoints: http://localhost:8000/mcp/sse, /mcp/http
+```
+
+That's it. FastMCP runs in the same process, no additional services needed.
+
+### Configuration
+
+MCP settings are added to the existing `APIConfig` in `backend/kg/api/config.py`:
+
+```python
+# backend/kg/api/config.py
+class APIConfig(BaseSettings):
+    # Existing settings (already in codebase)
+    environment: str = "development"
     host: str = "0.0.0.0"
     port: int = 8000
-    workers: int = 4
+    log_level: str = "INFO"
+    storage_backend_type: str = Field(default="dgraph", alias="STORAGE_BACKEND_TYPE")
+    storage_endpoint: str = Field(default="localhost:9080", alias="STORAGE_ENDPOINT")
+    # ...
 
-    model_config = {"env_prefix": "KG_SERVER_"}
+    # MCP settings (new - add these fields)
+    mcp_max_query_complexity: int = 10000
+    mcp_max_query_depth: int = 10
+    mcp_query_timeout_seconds: int = 30
 
-class MCPSettings(BaseSettings):
-    enable_sse: bool = True
-    enable_http: bool = True
-    max_query_complexity: int = 10000
-    max_query_depth: int = 10
-    query_timeout_seconds: int = 30
-    rate_limit_per_minute: int = 100
-    rate_limit_burst: int = 20
-    audit_log_enabled: bool = True
+    class Config:
+        env_prefix = ""  # Uses direct env var names
+        case_sensitive = False
+```
 
-    model_config = {"env_prefix": "KG_MCP_"}
+Add optional MCP environment variables to `docker-compose.yml`:
 
-class Settings(BaseSettings):
-    server: ServerSettings = ServerSettings()
-    mcp: MCPSettings = MCPSettings()
-    # ... other settings
+```yaml
+# docker-compose.yml
+services:
+  kg-backend:
+    environment:
+      # Existing settings
+      - STORAGE_BACKEND_TYPE=dgraph
+      - STORAGE_ENDPOINT=dgraph-alpha:9080
+      - LOG_LEVEL=DEBUG
+
+      # MCP settings (optional - has defaults)
+      - MCP_MAX_QUERY_COMPLEXITY=10000
+      - MCP_MAX_QUERY_DEPTH=10
+      - MCP_QUERY_TIMEOUT_SECONDS=30
 ```
 
 ### Available Endpoints
 
-Once the server is running, both interfaces are accessible at the same host/port:
+After `docker-compose up`, all endpoints are available:
 
-**REST API Endpoints**:
+**Existing**:
 
-- **Submit**: `POST http://localhost:8000/api/v1/graph/submit`
-- **Validate**: `POST http://localhost:8000/api/v1/graph/validate`
-- **Health**: `GET http://localhost:8000/api/v1/health`
-- **Info**: `GET http://localhost:8000/api/v1/info`
+- `GET http://localhost:8000/` - Root
+- `GET http://localhost:8000/health` - Health check
+- `GET http://localhost:8000/docs` - API docs
 
-**MCP Endpoints**:
+**MCP (new)**:
 
-- **SSE (Primary)**: `GET http://localhost:8000/mcp/sse`
-- **HTTP**: `POST http://localhost:8000/mcp/http`
-- **Health**: `GET http://localhost:8000/mcp/health`
-- **Info**: `GET http://localhost:8000/mcp/info`
+- `GET http://localhost:8000/mcp/sse` - MCP SSE transport
+- `POST http://localhost:8000/mcp/http` - MCP HTTP transport
 
 ## Integration with Claude Code
 
