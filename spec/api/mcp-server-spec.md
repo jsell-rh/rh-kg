@@ -7,7 +7,7 @@ This specification defines the Model Context Protocol (MCP) server for AI-native
 ### Key Principles
 
 1. **Read-Only Operations**: The MCP server MUST reject all mutation operations
-2. **Network-Accessible Service**: Runs as HTTP/SSE service, not subprocess (enables multi-user access, authentication, load balancing)
+2. **Integrated Service**: Runs within the main API server at `/mcp/*` endpoints (shares configuration, deployment, authentication)
 3. **GraphQL Native**: Leverages Dgraph's auto-generated GraphQL endpoint
 4. **AI-Optimized**: Designed for conversational, iterative querying by AI assistants
 5. **Zero Custom Resolvers**: Uses Dgraph's native GraphQL generation from entity schemas
@@ -27,51 +27,76 @@ This specification defines the Model Context Protocol (MCP) server for AI-native
 │  │ (Claude Code)│                    │  (CI/CD)     │       │
 │  └──────┬───────┘                    └──────┬───────┘       │
 │         │                                    │               │
-│         │ MCP Protocol                       │ HTTP/REST     │
-│         │ (SSE/HTTP)                         │               │
-│         ▼                                    ▼               │
-│  ┌──────────────┐                    ┌──────────────┐       │
-│  │  MCP Server  │                    │  REST API    │       │
-│  │              │                    │              │       │
-│  │ - Resources  │                    │ - Submit     │       │
-│  │ - Tools      │                    │ - Validate   │       │
-│  │ - Prompts    │                    │ - Health     │       │
-│  │              │                    │              │       │
-│  │ READ-ONLY    │                    │ READ/WRITE   │       │
-│  └──────┬───────┘                    └──────┬───────┘       │
+│         │ MCP/SSE                            │ HTTP/REST     │
+│         │ (/mcp/*)                           │ (/api/v1/*)   │
 │         │                                    │               │
-│         │ GraphQL (queries only)             │ DQL/GraphQL   │
-│         │                                    │ (all ops)     │
-│         ▼                                    ▼               │
-│  ┌─────────────────────────────────────────────────┐        │
-│  │              Dgraph Database                     │        │
-│  │                                                  │        │
-│  │  - Native GraphQL Endpoint (auto-generated)     │        │
-│  │  - Schema from entity YAML files                │        │
-│  │  - Graph storage and querying                   │        │
-│  └─────────────────────────────────────────────────┘        │
+│         └────────────────┬───────────────────┘               │
+│                          ▼                                   │
+│         ┌────────────────────────────────────┐              │
+│         │    Knowledge Graph API Server      │              │
+│         │                                     │              │
+│         │  ┌──────────────┬──────────────┐   │              │
+│         │  │ MCP Module   │ REST Module  │   │              │
+│         │  │              │              │   │              │
+│         │  │ - Resources  │ - Submit     │   │              │
+│         │  │ - Tools      │ - Validate   │   │              │
+│         │  │ - Prompts    │ - Health     │   │              │
+│         │  │              │              │   │              │
+│         │  │ READ-ONLY    │ READ/WRITE   │   │              │
+│         │  └──────┬───────┴──────┬───────┘   │              │
+│         │         │              │           │              │
+│         │         │ Shared Config & Auth    │              │
+│         │         └──────────────┘           │              │
+│         └────────────────┬───────────────────┘              │
+│                          │                                   │
+│                          │ GraphQL & DQL                     │
+│                          ▼                                   │
+│         ┌────────────────────────────────────┐              │
+│         │       Dgraph Database              │              │
+│         │                                     │              │
+│         │  - Native GraphQL (auto-generated) │              │
+│         │  - Schema from entity YAML files   │              │
+│         │  - Graph storage and querying      │              │
+│         └────────────────────────────────────┘              │
 │                                                               │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ### Component Responsibilities
 
-#### MCP Server
+#### Knowledge Graph API Server
 
-- Accept MCP protocol requests (SSE/HTTP transport)
-- Run as network-accessible service alongside REST API
+Single unified server process that hosts both REST and MCP interfaces:
+
+- Loads shared configuration (Dgraph connection, authentication, logging)
+- Initializes FastAPI application with both REST and MCP routers
+- Manages database connection pool
+- Handles authentication and authorization
+- Provides unified health monitoring and metrics
+
+#### MCP Module (`/mcp/*` endpoints)
+
+- Accept MCP protocol requests at `/mcp/sse` and `/mcp/http`
 - Provide schema discovery resources
 - Expose GraphQL query tools
 - Provide common query prompt templates
 - **Validate read-only operations** (no mutations)
 - Forward validated queries to Dgraph GraphQL endpoint
+- Share authentication, configuration, and logging with REST module
+
+#### REST Module (`/api/v1/*` endpoints)
+
+- Handle data submission and validation
+- Process write operations (create, update, upsert)
+- Provide health checks and system information
+- Share authentication, configuration, and logging with MCP module
 
 #### Dgraph Database
 
 - Auto-generate GraphQL schema from entity definitions
-- Execute GraphQL queries
+- Execute GraphQL queries (from MCP) and mutations (from REST)
 - Return graph data
-- Enforce read-only permissions for MCP service account
+- Enforce read-only permissions for MCP-initiated queries
 
 ## Read-Only Validation
 
@@ -972,16 +997,17 @@ All MCP queries are logged with:
 
 ## Implementation Checklist
 
-### Phase 1: Core MCP Server
+### Phase 1: Core MCP Integration
 
-- [ ] Implement MCP protocol handler (FastMCP)
-- [ ] Add SSE transport layer for streaming responses
-- [ ] Add HTTP transport layer for request/response
-- [ ] Implement network server (host/port configuration)
+- [ ] Create MCP router module in FastAPI server
+- [ ] Add `/mcp/sse` endpoint with SSE transport
+- [ ] Add `/mcp/http` endpoint with HTTP transport
+- [ ] Add `/mcp/health` and `/mcp/info` endpoints
+- [ ] Implement MCP protocol handler (FastMCP integration)
 - [ ] Add GraphQL AST validation for read-only enforcement
-- [ ] Create Dgraph GraphQL client wrapper
+- [ ] Create Dgraph GraphQL client wrapper (shared with REST)
 - [ ] Implement error handling and sanitization
-- [ ] Add comprehensive logging
+- [ ] Add MCP-specific logging (reuses shared logger)
 
 ### Phase 2: Resources
 
@@ -1011,25 +1037,33 @@ All MCP queries are logged with:
 - [ ] Add query timeouts
 - [ ] Create audit logging system
 
-### Phase 6: Deployment & Infrastructure
+### Phase 6: Configuration & Settings
 
-- [ ] Create systemd service unit file
-- [ ] Create Docker container with health checks
-- [ ] Configure reverse proxy (nginx/tracer) for SSL termination
-- [ ] Set up load balancer configuration for horizontal scaling
-- [ ] Create Kubernetes deployment manifests (if applicable)
-- [ ] Configure monitoring and alerting (Prometheus/Grafana)
+- [ ] Add `MCPSettings` class to Pydantic Settings
+- [ ] Add environment variable support for MCP config
+- [ ] Document all `KG_MCP_*` environment variables
+- [ ] Add MCP settings validation
+- [ ] Add configuration examples for common scenarios
 
-### Phase 7: Testing & Documentation
+### Phase 7: Deployment & Infrastructure
 
-- [ ] Unit tests for read-only validation
-- [ ] Integration tests with Dgraph
+- [ ] No separate deployment needed (integrated with REST API server)
+- [ ] Update existing systemd service to include MCP endpoints
+- [ ] Update Docker container documentation to mention `/mcp/*` endpoints
+- [ ] Update Kubernetes manifests with MCP environment variables
+- [ ] Configure monitoring for MCP-specific metrics (query complexity, rate limits)
+
+### Phase 8: Testing & Documentation
+
+- [ ] Unit tests for read-only validation (GraphQL AST parsing)
+- [ ] Integration tests with Dgraph GraphQL endpoint
 - [ ] MCP protocol compliance tests
-- [ ] Load testing for concurrent client scenarios
-- [ ] Performance benchmarks
-- [ ] User documentation with examples
-- [ ] Deployment runbook for operations
-- [ ] Troubleshooting guide
+- [ ] Load testing for concurrent MCP client scenarios
+- [ ] Performance benchmarks (query latency, throughput)
+- [ ] End-to-end tests with Claude Code client
+- [ ] User documentation with Claude Code configuration examples
+- [ ] API documentation for `/mcp/*` endpoints
+- [ ] Troubleshooting guide for common MCP issues
 
 ## Usage Examples
 
@@ -1208,73 +1242,210 @@ All MCP queries are logged with:
 
 ## Deployment
 
-### Running the MCP Server
+### Integrated Server Architecture
 
-The MCP server runs as a network-accessible service alongside the REST API:
+The MCP module runs within the main Knowledge Graph API server - there is **no separate MCP service to deploy**. When you start the API server, both REST (`/api/v1/*`) and MCP (`/mcp/*`) endpoints are available automatically.
 
 **Development (Local)**:
 
 ```bash
-# Start the MCP server on port 8001
-kg mcp serve --host 0.0.0.0 --port 8001
+# Start the unified API server (includes both REST and MCP)
+kg server start
+
+# Server provides both interfaces:
+# - REST API: http://localhost:8000/api/v1/*
+# - MCP Server: http://localhost:8000/mcp/*
 ```
 
-**Production (Service)**:
+**Production (systemd)**:
 
 ```bash
-# Run as systemd service
-sudo systemctl start kg-mcp-server
-
-# Or via Docker
-docker run -p 8001:8001 \
-  -e KG_DGRAPH_URL=http://dgraph:8080 \
-  kg-server mcp serve
+# Single service runs both interfaces
+sudo systemctl start kg-server
+sudo systemctl status kg-server
 ```
 
-**Configuration**:
+**Production (Docker)**:
+
+```bash
+# Single container hosts both REST and MCP
+docker run -p 8000:8000 \
+  -e KG_DGRAPH_URL=http://dgraph:8080 \
+  -e KG_MCP_MAX_QUERY_COMPLEXITY=10000 \
+  -e KG_MCP_QUERY_TIMEOUT_SECONDS=30 \
+  kg-server:latest
+```
+
+**Production (Kubernetes)**:
 
 ```yaml
-# /etc/kg/mcp-server.yaml
-server:
-  host: 0.0.0.0
-  port: 8001
-  transport: sse # Primary transport
-  enable_http: true # Also support HTTP for compatibility
-
-dgraph:
-  url: http://localhost:8080
-  graphql_endpoint: /graphql
-
-security:
-  max_query_complexity: 10000
-  max_query_depth: 10
-  query_timeout_seconds: 30
-  rate_limit_per_minute: 100
-
-logging:
-  level: info
-  format: json
-  audit_log_path: /var/log/kg/mcp-audit.log
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kg-server
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+        - name: kg-server
+          image: kg-server:latest
+          ports:
+            - containerPort: 8000 # Single port for both interfaces
+          env:
+            - name: KG_DGRAPH_URL
+              value: "http://dgraph:8080"
+            - name: KG_MCP_MAX_QUERY_COMPLEXITY
+              value: "10000"
+            - name: KG_MCP_QUERY_TIMEOUT_SECONDS
+              value: "30"
+            - name: KG_LOG_LEVEL
+              value: "info"
+          envFrom:
+            - secretRef:
+                name: kg-secrets # Authentication tokens, etc.
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kg-server
+spec:
+  ports:
+    - port: 80
+      targetPort: 8000
+  selector:
+    app: kg-server
 ```
 
-### Default Endpoints
+### Configuration via Environment Variables
 
-- **SSE Endpoint**: `http://localhost:8001/mcp/sse`
-- **HTTP Endpoint**: `http://localhost:8001/mcp/http`
-- **Health Check**: `http://localhost:8001/mcp/health`
-- **Server Info**: `http://localhost:8001/mcp/info`
+The MCP module shares the same Pydantic Settings-based configuration as the REST API. All configuration is done via environment variables (no config files needed).
+
+**Core Settings** (shared between REST and MCP):
+
+```bash
+# Server settings
+KG_SERVER_HOST=0.0.0.0
+KG_SERVER_PORT=8000
+KG_SERVER_WORKERS=4
+
+# Dgraph connection
+KG_DGRAPH_URL=http://localhost:8080
+KG_DGRAPH_GRAPHQL_ENDPOINT=/graphql
+KG_DGRAPH_CONNECTION_POOL_SIZE=10
+
+# Authentication (shared by both REST and MCP)
+KG_AUTH_ENABLED=true
+KG_AUTH_TOKEN_VALIDATION_URL=https://auth.redhat.com/validate
+
+# Logging (shared)
+KG_LOG_LEVEL=info
+KG_LOG_FORMAT=json
+```
+
+**MCP-Specific Settings**:
+
+```bash
+# Transport options
+KG_MCP_ENABLE_SSE=true           # Enable SSE transport (default: true)
+KG_MCP_ENABLE_HTTP=true          # Enable HTTP transport (default: true)
+
+# Query limits
+KG_MCP_MAX_QUERY_COMPLEXITY=10000     # Maximum query complexity score
+KG_MCP_MAX_QUERY_DEPTH=10             # Maximum query nesting depth
+KG_MCP_QUERY_TIMEOUT_SECONDS=30       # Query execution timeout
+
+# Rate limiting
+KG_MCP_RATE_LIMIT_PER_MINUTE=100      # Max queries per minute per client
+KG_MCP_RATE_LIMIT_BURST=20            # Burst allowance
+
+# Audit logging
+KG_MCP_AUDIT_LOG_ENABLED=true         # Enable MCP query audit logging
+```
+
+**REST-Specific Settings**:
+
+```bash
+# Upload limits
+KG_REST_MAX_UPLOAD_SIZE_MB=10
+
+# CORS
+KG_REST_ENABLE_CORS=true
+KG_REST_CORS_ORIGINS=http://localhost:3000,https://console.redhat.com
+```
+
+**Example `.env` file for development**:
+
+```bash
+# .env
+KG_DGRAPH_URL=http://localhost:8080
+KG_LOG_LEVEL=debug
+KG_AUTH_ENABLED=false
+KG_MCP_MAX_QUERY_COMPLEXITY=5000
+KG_MCP_AUDIT_LOG_ENABLED=true
+```
+
+**Pydantic Settings Model Example**:
+
+```python
+from pydantic_settings import BaseSettings
+
+class ServerSettings(BaseSettings):
+    host: str = "0.0.0.0"
+    port: int = 8000
+    workers: int = 4
+
+    model_config = {"env_prefix": "KG_SERVER_"}
+
+class MCPSettings(BaseSettings):
+    enable_sse: bool = True
+    enable_http: bool = True
+    max_query_complexity: int = 10000
+    max_query_depth: int = 10
+    query_timeout_seconds: int = 30
+    rate_limit_per_minute: int = 100
+    rate_limit_burst: int = 20
+    audit_log_enabled: bool = True
+
+    model_config = {"env_prefix": "KG_MCP_"}
+
+class Settings(BaseSettings):
+    server: ServerSettings = ServerSettings()
+    mcp: MCPSettings = MCPSettings()
+    # ... other settings
+```
+
+### Available Endpoints
+
+Once the server is running, both interfaces are accessible at the same host/port:
+
+**REST API Endpoints**:
+
+- **Submit**: `POST http://localhost:8000/api/v1/graph/submit`
+- **Validate**: `POST http://localhost:8000/api/v1/graph/validate`
+- **Health**: `GET http://localhost:8000/api/v1/health`
+- **Info**: `GET http://localhost:8000/api/v1/info`
+
+**MCP Endpoints**:
+
+- **SSE (Primary)**: `GET http://localhost:8000/mcp/sse`
+- **HTTP**: `POST http://localhost:8000/mcp/http`
+- **Health**: `GET http://localhost:8000/mcp/health`
+- **Info**: `GET http://localhost:8000/mcp/info`
 
 ## Integration with Claude Code
 
 ### Configuration
 
-Users configure the MCP server in their Claude Code settings to connect to the network service:
+Users configure the MCP server in their Claude Code settings. Since MCP runs on the same server as the REST API, configuration is simple:
+
+**Development (Local)**:
 
 ```json
 {
   "mcpServers": {
     "kg-server": {
-      "url": "http://localhost:8001/mcp/sse",
+      "url": "http://localhost:8000/mcp/sse",
       "transport": "sse",
       "name": "Knowledge Graph Server"
     }
@@ -1282,7 +1453,7 @@ Users configure the MCP server in their Claude Code settings to connect to the n
 }
 ```
 
-**Production Configuration**:
+**Production**:
 
 ```json
 {
@@ -1290,14 +1461,16 @@ Users configure the MCP server in their Claude Code settings to connect to the n
     "kg-server": {
       "url": "https://kg.redhat.com/mcp/sse",
       "transport": "sse",
-      "name": "Knowledge Graph Server",
+      "name": "Red Hat Knowledge Graph",
       "headers": {
-        "Authorization": "Bearer ${KG_MCP_TOKEN}"
+        "Authorization": "Bearer ${KG_API_TOKEN}"
       }
     }
   }
 }
 ```
+
+**Note**: The same authentication token used for REST API access works for MCP endpoints, since both interfaces share the same authentication system (configured via `KG_AUTH_*` environment variables).
 
 ### Conversational Usage
 
