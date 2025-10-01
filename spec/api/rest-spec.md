@@ -40,7 +40,7 @@ Both interfaces access the same Dgraph database and provide consistent data view
 
 ## Base Configuration
 
-### Base URL
+### Base URL (Notional)
 
 ```
 https://kg.redhat.com/api/v1
