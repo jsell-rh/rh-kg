@@ -1,0 +1,235 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://redhat.com/schemas/knowledge-graph/1.0.0",
+  "title": "Red Hat Knowledge Graph Schema",
+  "description": "Schema for Red Hat knowledge graph YAML files",
+  "type": "object",
+  "required": [
+    "namespace",
+    "entity"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "namespace": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*[a-z0-9]$|^[a-z]$",
+      "description": "Namespace for grouping related entities (kebab-case format)",
+      "examples": [
+        "rosa-hcp",
+        "shared-utils",
+        "openshift-auth"
+      ]
+    },
+    "entity": {
+      "type": "object",
+      "description": "Entity definitions for the knowledge graph",
+      "properties": {
+        "repository": {
+          "type": "array",
+          "description": "Repository entity definitions",
+          "items": {
+            "$ref": "#/$defs/repositoryEntity"
+          }
+        },
+        "external_dependency_package": {
+          "type": "array",
+          "description": "External_dependency_package entity definitions",
+          "items": {
+            "$ref": "#/$defs/external_dependency_packageEntity"
+          }
+        },
+        "external_dependency_version": {
+          "type": "array",
+          "description": "External_dependency_version entity definitions",
+          "items": {
+            "$ref": "#/$defs/external_dependency_versionEntity"
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "repositoryEntity": {
+      "type": "object",
+      "description": "Code repository entity representing a git repository",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "git_repo_url",
+          "owners"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "owners": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "description": "List of team email addresses responsible for repository"
+          },
+          "git_repo_url": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https?://",
+            "description": "Git repository URL (GitHub, GitLab, etc.)"
+          },
+          "depends_on": {
+            "type": "array",
+            "description": "External dependencies used by this repository",
+            "default": [],
+            "items": {
+              "$ref": "#/$defs/externalDependencyReference"
+            },
+            "examples": [
+              [
+                "external://pypi/requests/2.31.0"
+              ]
+            ]
+          },
+          "internal_depends_on": {
+            "type": "array",
+            "description": "Internal dependencies (other repositories)",
+            "default": [],
+            "items": {
+              "$ref": "#/$defs/internalDependencyReference"
+            },
+            "examples": [
+              [
+                "internal://shared-utils/logging-library"
+              ]
+            ]
+          }
+        }
+      }
+    },
+    "external_dependency_packageEntity": {
+      "type": "object",
+      "description": "External package from an ecosystem (pypi, npm, etc.)",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "ecosystem",
+          "package_name"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "ecosystem": {
+            "type": "string",
+            "enum": [
+              "pypi",
+              "npm",
+              "golang.org/x",
+              "github.com",
+              "crates.io"
+            ],
+            "description": "Package ecosystem"
+          },
+          "package_name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Package name within ecosystem"
+          },
+          "has_version": {
+            "type": "array",
+            "description": "Versions of this package",
+            "default": [],
+            "items": {
+              "$ref": "#/$defs/externalDependencyReference"
+            },
+            "examples": [
+              [
+                "external://pypi/requests/2.31.0"
+              ]
+            ]
+          }
+        }
+      }
+    },
+    "external_dependency_versionEntity": {
+      "type": "object",
+      "description": "Specific version of an external package",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "ecosystem",
+          "package_name",
+          "version"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "ecosystem": {
+            "type": "string",
+            "enum": [
+              "pypi",
+              "npm",
+              "golang.org/x",
+              "github.com",
+              "crates.io"
+            ],
+            "description": "Package ecosystem"
+          },
+          "package_name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Package name within ecosystem"
+          },
+          "version": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Package version"
+          },
+          "package": {
+            "type": "array",
+            "description": "Parent package this version belongs to",
+            "default": [],
+            "items": {
+              "$ref": "#/$defs/externalDependencyReference"
+            },
+            "examples": [
+              [
+                "external://pypi/requests/2.31.0"
+              ]
+            ]
+          },
+          "referenced_by": {
+            "type": "array",
+            "description": "Repositories that depend on this version",
+            "default": [],
+            "items": {
+              "$ref": "#/$defs/internalDependencyReference"
+            }
+          }
+        }
+      }
+    },
+    "externalDependencyReference": {
+      "type": "string",
+      "pattern": "^external://[a-zA-Z0-9._-]+/[a-zA-Z0-9@._/-]+/[a-zA-Z0-9._-]+$",
+      "description": "External dependency reference: external://<ecosystem>/<package>/<version>",
+      "examples": [
+        "external://pypi/requests/2.31.0",
+        "external://npm/@types/node/18.15.0",
+        "external://github.com/stretchr/testify/v1.8.0",
+        "external://golang.org/x/client-go/v0.28.4"
+      ]
+    },
+    "internalDependencyReference": {
+      "type": "string",
+      "pattern": "^internal://[a-z][a-z0-9_-]*[a-z0-9]/[a-zA-Z0-9._-]+$",
+      "description": "Internal dependency reference: internal://<namespace>/<entity-name>",
+      "examples": [
+        "internal://shared-utils/logging-library",
+        "internal://openshift-auth/auth-service",
+        "internal://rosa-hcp/rosa-operator"
+      ]
+    }
+  }
+}

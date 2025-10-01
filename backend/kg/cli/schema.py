@@ -31,6 +31,7 @@ def schema_command() -> None:
 @schema_command.command(name="export")
 @click.option(
     "--format",
+    "export_format",  # Use different parameter name to avoid Python keyword
     type=click.Choice(["json-schema"], case_sensitive=False),
     default="json-schema",
     help="Output format (currently only json-schema supported)",
@@ -65,7 +66,7 @@ def schema_command() -> None:
     help="Suppress output (only show errors)",
 )
 def export_command(
-    _format: str,  # - Reserved for future format support
+    export_format: str,  # noqa: ARG001 - Reserved for future format support
     output: str,
     schema_dir: str,
     pretty: bool,
