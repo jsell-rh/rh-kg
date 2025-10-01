@@ -1034,33 +1034,17 @@ All MCP queries are logged with:
 - [ ] Add query timeouts
 - [ ] Create audit logging system
 
-### Phase 6: Configuration & Settings
+### Phase 6: Testing & Documentation
 
-- [ ] Add `MCPSettings` class to Pydantic Settings
-- [ ] Add environment variable support for MCP config
-- [ ] Document all `KG_MCP_*` environment variables
-- [ ] Add MCP settings validation
-- [ ] Add configuration examples for common scenarios
-
-### Phase 7: Deployment & Infrastructure
-
-- [ ] No separate deployment needed (integrated with REST API server)
-- [ ] Update existing systemd service to include MCP endpoints
-- [ ] Update Docker container documentation to mention `/mcp/*` endpoints
-- [ ] Update Kubernetes manifests with MCP environment variables
-- [ ] Configure monitoring for MCP-specific metrics (query complexity, rate limits)
-
-### Phase 8: Testing & Documentation
-
-- [ ] Unit tests for read-only validation (GraphQL AST parsing)
-- [ ] Integration tests with Dgraph GraphQL endpoint
-- [ ] MCP protocol compliance tests
-- [ ] Load testing for concurrent MCP client scenarios
-- [ ] Performance benchmarks (query latency, throughput)
-- [ ] End-to-end tests with Claude Code client
-- [ ] User documentation with Claude Code configuration examples
-- [ ] API documentation for `/mcp/*` endpoints
-- [ ] Troubleshooting guide for common MCP issues
+- [ ] Unit tests for GraphQL AST read-only validation
+- [ ] Integration test: Start with `docker-compose up` and verify `/mcp/sse` responds
+- [ ] Test all MCP resources, tools, and prompts with MCP client
+- [ ] Load test: Multiple concurrent Claude Code sessions
+- [ ] Performance benchmarks: Query latency and throughput
+- [ ] End-to-end test with real Claude Code client
+- [ ] Update FastAPI `/docs` to document `/mcp/*` endpoints
+- [ ] Create Claude Code configuration guide
+- [ ] Add troubleshooting section to documentation
 
 ## Usage Examples
 
