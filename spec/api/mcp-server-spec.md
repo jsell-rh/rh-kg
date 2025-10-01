@@ -7,10 +7,11 @@ This specification defines the Model Context Protocol (MCP) server for AI-native
 ### Key Principles
 
 1. **Read-Only Operations**: The MCP server MUST reject all mutation operations
-2. **GraphQL Native**: Leverages Dgraph's auto-generated GraphQL endpoint
-3. **AI-Optimized**: Designed for conversational, iterative querying by AI assistants
-4. **Zero Custom Resolvers**: Uses Dgraph's native GraphQL generation from entity schemas
-5. **Security First**: Multiple layers of validation and enforcement
+2. **Network-Accessible Service**: Runs as HTTP/SSE service, not subprocess (enables multi-user access, authentication, load balancing)
+3. **GraphQL Native**: Leverages Dgraph's auto-generated GraphQL endpoint
+4. **AI-Optimized**: Designed for conversational, iterative querying by AI assistants
+5. **Zero Custom Resolvers**: Uses Dgraph's native GraphQL generation from entity schemas
+6. **Security First**: Multiple layers of validation and enforcement
 
 ## Architecture
 
@@ -27,7 +28,7 @@ This specification defines the Model Context Protocol (MCP) server for AI-native
 │  └──────┬───────┘                    └──────┬───────┘       │
 │         │                                    │               │
 │         │ MCP Protocol                       │ HTTP/REST     │
-│         │ (stdio/SSE)                        │               │
+│         │ (SSE/HTTP)                         │               │
 │         ▼                                    ▼               │
 │  ┌──────────────┐                    ┌──────────────┐       │
 │  │  MCP Server  │                    │  REST API    │       │
@@ -57,7 +58,8 @@ This specification defines the Model Context Protocol (MCP) server for AI-native
 
 #### MCP Server
 
-- Accept MCP protocol requests (stdio/SSE transport)
+- Accept MCP protocol requests (SSE/HTTP transport)
+- Run as network-accessible service alongside REST API
 - Provide schema discovery resources
 - Expose GraphQL query tools
 - Provide common query prompt templates
@@ -192,7 +194,7 @@ def validate_read_only_query(query: str) -> tuple[bool, str | None]:
     "tools": true,
     "prompts": true
   },
-  "transport": ["stdio", "sse"]
+  "transport": ["sse", "http"]
 }
 ```
 
@@ -973,6 +975,9 @@ All MCP queries are logged with:
 ### Phase 1: Core MCP Server
 
 - [ ] Implement MCP protocol handler (FastMCP)
+- [ ] Add SSE transport layer for streaming responses
+- [ ] Add HTTP transport layer for request/response
+- [ ] Implement network server (host/port configuration)
 - [ ] Add GraphQL AST validation for read-only enforcement
 - [ ] Create Dgraph GraphQL client wrapper
 - [ ] Implement error handling and sanitization
@@ -1006,14 +1011,25 @@ All MCP queries are logged with:
 - [ ] Add query timeouts
 - [ ] Create audit logging system
 
-### Phase 6: Testing & Documentation
+### Phase 6: Deployment & Infrastructure
+
+- [ ] Create systemd service unit file
+- [ ] Create Docker container with health checks
+- [ ] Configure reverse proxy (nginx/tracer) for SSL termination
+- [ ] Set up load balancer configuration for horizontal scaling
+- [ ] Create Kubernetes deployment manifests (if applicable)
+- [ ] Configure monitoring and alerting (Prometheus/Grafana)
+
+### Phase 7: Testing & Documentation
 
 - [ ] Unit tests for read-only validation
 - [ ] Integration tests with Dgraph
 - [ ] MCP protocol compliance tests
+- [ ] Load testing for concurrent client scenarios
 - [ ] Performance benchmarks
 - [ ] User documentation with examples
-- [ ] Runbook for operations
+- [ ] Deployment runbook for operations
+- [ ] Troubleshooting guide
 
 ## Usage Examples
 
@@ -1190,21 +1206,93 @@ All MCP queries are logged with:
 }
 ```
 
+## Deployment
+
+### Running the MCP Server
+
+The MCP server runs as a network-accessible service alongside the REST API:
+
+**Development (Local)**:
+
+```bash
+# Start the MCP server on port 8001
+kg mcp serve --host 0.0.0.0 --port 8001
+```
+
+**Production (Service)**:
+
+```bash
+# Run as systemd service
+sudo systemctl start kg-mcp-server
+
+# Or via Docker
+docker run -p 8001:8001 \
+  -e KG_DGRAPH_URL=http://dgraph:8080 \
+  kg-server mcp serve
+```
+
+**Configuration**:
+
+```yaml
+# /etc/kg/mcp-server.yaml
+server:
+  host: 0.0.0.0
+  port: 8001
+  transport: sse # Primary transport
+  enable_http: true # Also support HTTP for compatibility
+
+dgraph:
+  url: http://localhost:8080
+  graphql_endpoint: /graphql
+
+security:
+  max_query_complexity: 10000
+  max_query_depth: 10
+  query_timeout_seconds: 30
+  rate_limit_per_minute: 100
+
+logging:
+  level: info
+  format: json
+  audit_log_path: /var/log/kg/mcp-audit.log
+```
+
+### Default Endpoints
+
+- **SSE Endpoint**: `http://localhost:8001/mcp/sse`
+- **HTTP Endpoint**: `http://localhost:8001/mcp/http`
+- **Health Check**: `http://localhost:8001/mcp/health`
+- **Server Info**: `http://localhost:8001/mcp/info`
+
 ## Integration with Claude Code
 
 ### Configuration
 
-Users configure the MCP server in their Claude Code settings:
+Users configure the MCP server in their Claude Code settings to connect to the network service:
 
 ```json
 {
   "mcpServers": {
     "kg-server": {
-      "command": "kg",
-      "args": ["mcp", "serve"],
-      "env": {
-        "KG_DGRAPH_URL": "http://localhost:8080",
-        "KG_MCP_LOG_LEVEL": "info"
+      "url": "http://localhost:8001/mcp/sse",
+      "transport": "sse",
+      "name": "Knowledge Graph Server"
+    }
+  }
+}
+```
+
+**Production Configuration**:
+
+```json
+{
+  "mcpServers": {
+    "kg-server": {
+      "url": "https://kg.redhat.com/mcp/sse",
+      "transport": "sse",
+      "name": "Knowledge Graph Server",
+      "headers": {
+        "Authorization": "Bearer ${KG_MCP_TOKEN}"
       }
     }
   }
