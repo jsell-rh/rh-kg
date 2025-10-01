@@ -14,7 +14,9 @@ following a specification-driven development approach.
 ### Interface Specifications
 
 - `cli/` - Command-line interface specifications
-- `api/` - REST/GraphQL API specifications
+- `api/` - REST API and MCP server specifications
+  - `api/rest-spec.md` - REST API for data submission and programmatic access
+  - `api/mcp-server-spec.md` - MCP server for AI-native GraphQL querying
 - `storage/` - Dgraph storage interface specifications
 - `validation/` - Validation logic and error handling specifications
 
@@ -32,8 +34,9 @@ For new contributors, read specifications in this order:
 1. `schema-spec.md` - Understand the YAML format
 2. `data-model-spec.md` - Understand how data is stored
 3. `cli/validation-spec.md` - Understand the primary use case
-4. `api/rest-spec.md` - Understand the server interface
-5. `storage/dgraph-spec.md` - Understand storage implementation
+4. `api/rest-spec.md` - Understand the REST API for data submission
+5. `api/mcp-server-spec.md` - Understand the MCP server for AI-native querying
+6. `storage/dgraph-spec.md` - Understand storage implementation
 
 ## Specification Conventions
 

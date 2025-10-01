@@ -4,6 +4,40 @@
 
 This specification defines the REST API endpoints for the knowledge graph server. The API provides programmatic access to repository data, dependency queries, and system management functions.
 
+### Hybrid Architecture: REST + MCP
+
+The knowledge graph system provides two complementary interfaces:
+
+1. **REST API** (this document)
+   - **Purpose**: Data submission, validation, and programmatic access
+   - **Use Cases**: CI/CD pipelines, automated workflows, traditional applications
+   - **Operations**: Read and Write (full CRUD)
+   - **Authentication**: Bearer token (production)
+   - **Clients**: Build systems, GitHub Actions, web applications
+
+2. **MCP Server** (see [mcp-server-spec.md](./mcp-server-spec.md))
+   - **Purpose**: AI-native graph exploration and querying
+   - **Use Cases**: Conversational analysis, dependency exploration, ad-hoc investigations
+   - **Operations**: Read-only (GraphQL queries)
+   - **Authentication**: Local/development
+   - **Clients**: Claude Code, AI assistants, development tools
+
+**When to use REST API**:
+
+- ✅ Submitting repository data from CI/CD
+- ✅ Validating YAML files in automated workflows
+- ✅ Integrating with web applications
+- ✅ Any write operations (create, update, delete)
+
+**When to use MCP Server**:
+
+- ✅ Exploring dependencies conversationally
+- ✅ Complex graph traversals and analysis
+- ✅ Ad-hoc investigations during development
+- ✅ AI-assisted dependency management
+
+Both interfaces access the same Dgraph database and provide consistent data views.
+
 ## Base Configuration
 
 ### Base URL
